@@ -1,0 +1,67 @@
+﻿# ============================================================
+# 框架级配置 — 所有环境共享，不含环境变量占位符
+# 数据源/Redis/Kafka/JWT 等环境相关配置请见 application-{profile}.yml
+# ============================================================
+spring:
+  application:
+    name: ai-agent-java-service
+  profiles:
+    active: dev
+  main:
+    allow-bean-definition-overriding: true
+  web:
+    port: 8080
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+
+# === MyBatis Plus ===
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+  type-aliases-package: com.enterprise.aiagent.domain.model.entity
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: is_deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+
+# === Knife4j (Swagger/OpenAPI 3) ===
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
+# === gRPC Server ===
+grpc:
+  server:
+    port: 9090
+
+# === Actuator ===
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# === App 通用配置 ===
+app:
+  feature:
+    async-agent-task: true
+    stream-response: true

@@ -1,0 +1,52 @@
+﻿# ============================================================
+# 生产环境配置
+# 敏感信息通过 spring.config.import 从外部文件加载
+# 部署时将 config/application-secrets.yml 放到 jar 同级目录
+# ============================================================
+spring:
+  config:
+    import: optional:file:./config/application-secrets.yml
+
+  datasource:
+    url: "jdbc:mysql://prod-db-host:3306/enterprise_ai?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai"
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+
+  data:
+    redis:
+      host: prod-redis-host
+      port: 6379
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 4
+
+  kafka:
+    bootstrap-servers: prod-kafka-host:9092
+    consumer:
+      group-id: ai-agent-java-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+logging:
+  level:
+    com.enterprise.aiagent: WARN
+    org.springframework: WARN
+  file:
+    path: /var/log/java-service
+
+# === JWT ===
+jwt:
+  issuer: enterprise-ai-agent-platform
+  expiration: 900000
+  refresh-expiration: 604800000

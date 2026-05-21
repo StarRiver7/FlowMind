@@ -1,0 +1,33 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=MySQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  sql:
+    init:
+      mode: always
+  jpa:
+    hibernate:
+      ddl-auto: none
+  flyway:
+    enabled: false
+  kafka:
+    enabled: false
+
+mybatis-plus:
+  global-config:
+    db-config:
+      logic-delete-field: is_deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+jwt:
+  secret: test-secret-key-for-unit-tests-only-must-be-256-bits-long
+  expiration: 3600000
+  refresh-expiration: 86400000
+
+app:
+  ai-service:
+    base-url: http://localhost:8000
+    timeout: 10s

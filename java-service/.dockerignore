@@ -1,0 +1,8 @@
+target/classes
+target/test-classes
+target/*.jar.original
+.git
+.idea
+*.iml
+*.log
+logs/

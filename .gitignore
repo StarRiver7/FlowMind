@@ -1,0 +1,55 @@
+﻿# ============================================================
+# Enterprise AI Agent Platform - .gitignore
+# ============================================================
+
+# === Secrets (production keys) ===
+**/application-secrets.yml
+
+# === Java ===
+java-service/target/
+java-service/*.jar
+java-service/*.war
+java-service/.classpath
+java-service/.project
+java-service/.settings/
+java-service/.idea/
+java-service/*.iml
+java-service/.mvn/
+
+# === Python ===
+python-ai-service/__pycache__/
+python-ai-service/*.py[cod]
+python-ai-service/*.egg-info/
+python-ai-service/.venv/
+python-ai-service/venv/
+python-ai-service/.pytest_cache/
+python-ai-service/.mypy_cache/
+python-ai-service/.ruff_cache/
+python-ai-service/dist/
+python-ai-service/poetry.lock
+
+# === IDE ===
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# === Environment ===
+.env
+.env.*
+*.local
+
+# === Logs ===
+logs/
+*.log
+
+# === Docker ===
+docker-compose.override.yml
+
+# === Temp ===
+tmp/
+temp/
+*.tmp
+*.bak
