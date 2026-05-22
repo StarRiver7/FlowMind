@@ -32,9 +32,10 @@ import java.util.List;
  *
  * <p>企业级混合认证架构：</p>
  * <ul>
- *   <li>Access Token：无状态 JWT，短有效期（15min），通过 Bearer header 传递</li>
- *   <li>Refresh Token：不透明令牌，存入 Redis，服务端可控，支持滑动刷新与强制失效</li>
- *   <li>Token 黑名单：登出时将 Access Token 的 jti 加入 Redis 黑名单，阻止重用</li>
+ *   <li>Access Token：无状态 JWT，15min，Bearer header 传递</li>
+ *   <li>Refresh Token：{userId}:{uuid} 格式，存入 Redis，前端只需透传</li>
+ *   <li>deviceId：由 User-Agent 自动推导，前端无需关心</li>
+ *   <li>Token 黑名单：登出时 jti 加入 Redis 黑名单</li>
  * </ul>
  */
 @Slf4j
@@ -50,9 +51,6 @@ public class AuthService {
     private final RefreshTokenService refreshTokenService;
     private final TokenBlacklistService tokenBlacklistService;
 
-    /**
-     * 用户注册 — 默认分配 employee 角色（role_id = 4）
-     */
     @Transactional
     public void register(RegisterReq req) {
         if (userMapper.findByUsername(req.getUsername()).isPresent()) {
@@ -82,8 +80,9 @@ public class AuthService {
     /**
      * 用户登录 — 生成双 Token
      * <ul>
-     *   <li>Access Token：无状态 JWT，有效期 15 分钟，通过 Bearer header 传递</li>
-     *   <li>Refresh Token：不透明 UUID，存入 Redis（Key: refresh_token:{userId}:{deviceId}），有效期 7 天</li>
+     *   <li>Access Token：无状态 JWT，15min</li>
+     *   <li>Refresh Token：{userId}:{uuid} 格式，存入 Redis</li>
+     *   <li>deviceId：自动从 User-Agent 推导，支持同浏览器自动续期</li>
      * </ul>
      */
     @Transactional
@@ -101,29 +100,24 @@ public class AuthService {
             throw new BusinessException(ResultCode.UNAUTHORIZED, "用户名或密码错误");
         }
 
-        // 更新最后登录信息
         user.setLastLoginTime(LocalDateTime.now());
         user.setLastLoginIp(ip);
         userMapper.updateById(user);
 
-        // 确定 deviceId：优先使用客户端传入值，否则从 User-Agent 生成
-        String deviceId = resolveDeviceId(req.getDeviceId(), userAgent);
+        String deviceId = deriveDeviceId(userAgent);
 
-        // 生成 Access Token（无状态 JWT）
         List<String> roles = userMapper.findRoleCodesByUserId(user.getId());
         String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getUsername(), roles);
 
-        // 生成 Refresh Token（不透明，存入 Redis）
+        // Refresh Token 格式：{userId}:{uuid}，后端可自解析 userId
         String refreshToken = refreshTokenService.createRefreshToken(user.getId(), deviceId);
 
         recordLoginLog(user.getId(), user.getUsername(), "LOGIN", ip, userAgent, 1, null);
-
         log.info("用户登录: username={}, roles={}, deviceId={}", user.getUsername(), roles, deviceId);
 
         return LoginVO.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
-                .deviceId(deviceId)
                 .tokenType("Bearer")
                 .expiresIn(jwtTokenProvider.getExpiration() / 1000)
                 .userInfo(LoginVO.UserInfo.builder()
@@ -138,45 +132,49 @@ public class AuthService {
 
     /**
      * 刷新 Access Token
-     * <p>
-     * 流程：Redis 验证 Refresh Token → 原子轮换新 Refresh Token → 签发新 Access Token
-     * </p>
+     * <p>从 refreshToken 中自动解析 userId，从 User-Agent 自动推导 deviceId</p>
      *
-     * @param userId       用户ID（用于 Redis Key 定位）
-     * @param deviceId     设备标识
      * @param refreshToken 当前的 Refresh Token
      * @param ip           客户端 IP
-     * @param userAgent    客户端 User-Agent
+     * @param userAgent    客户端 User-Agent（用于推导 deviceId）
      * @return 新的 Token 对
      */
+
+    /**
+     * 刷新 Access Token（滑动刷新）
+     * <p>
+     * 验证 Refresh Token → 签发新 Access Token → 必要时延长 Redis TTL。
+     * Refresh Token 值不变（不轮换），避免并发竞态。
+     * </p>
+     */
     @Transactional
-    public LoginVO refreshToken(Long userId, String deviceId, String refreshToken,
-                                String ip, String userAgent) {
-        // 验证用户状态
+    public LoginVO refreshToken(String refreshToken, String ip, String userAgent) {
+        String deviceId = deriveDeviceId(userAgent);
+
+        // 验证 Refresh Token 并执行滑动刷新（TTL < 1/4 时自动延长）
+        if (!refreshTokenService.validateAndExtendTtl(refreshToken, deviceId)) {
+            Long userId = refreshTokenService.parseUserId(refreshToken);
+            String username = userId != null ? getUserName(userId) : "unknown";
+            recordLoginLog(userId, username, "REFRESH", ip, userAgent, 0, "Refresh Token无效");
+            throw new BusinessException(ResultCode.UNAUTHORIZED, "refreshToken无效或已过期");
+        }
+
+        Long userId = refreshTokenService.parseUserId(refreshToken);
         User user = userMapper.selectById(userId);
         if (user == null || user.getStatus() == 0) {
             throw new BusinessException(ResultCode.UNAUTHORIZED, "用户不存在或已禁用");
         }
 
-        // Redis 原子验证 + 轮换 Refresh Token
-        String newRefreshToken = refreshTokenService.rotateRefreshToken(userId, deviceId, refreshToken);
-        if (newRefreshToken == null) {
-            recordLoginLog(userId, user.getUsername(), "REFRESH", ip, userAgent, 0, "Refresh Token无效");
-            throw new BusinessException(ResultCode.UNAUTHORIZED, "refreshToken无效或已过期");
-        }
-
-        // 签发新 Access Token
         List<String> roles = userMapper.findRoleCodesByUserId(userId);
         String newAccessToken = jwtTokenProvider.generateAccessToken(userId, user.getUsername(), roles);
 
         recordLoginLog(userId, user.getUsername(), "REFRESH", ip, userAgent, 1, null);
-
         log.info("Token refreshed: userId={}, deviceId={}", userId, deviceId);
 
+        // refreshToken 值不变，原样返回
         return LoginVO.builder()
                 .accessToken(newAccessToken)
-                .refreshToken(newRefreshToken)
-                .deviceId(deviceId)
+                .refreshToken(refreshToken)
                 .tokenType("Bearer")
                 .expiresIn(jwtTokenProvider.getExpiration() / 1000)
                 .userInfo(LoginVO.UserInfo.builder()
@@ -190,39 +188,36 @@ public class AuthService {
     }
 
     /**
-     * 登出 — 双重失效机制
-     * <ul>
-     *   <li>将当前 Access Token 加入 Redis 黑名单（阻止重用）</li>
-     *   <li>删除 Redis 中的 Refresh Token（阻止续期）</li>
-     * </ul>
+     * 登出 — 双重失效
+     * <p>Access Token → 黑名单 / Refresh Token → Redis 删除</p>
      *
-     * @param accessToken  当前 Access Token（用于提取 jti 加入黑名单）
-     * @param userId       用户ID
-     * @param deviceId     设备标识（可选，传入时精确删除该设备 Refresh Token）
+     * @param accessToken  当前 Access Token（从请求头提取）
+     * @param refreshToken Refresh Token（可选，传入时精确删除）
      * @param ip           客户端 IP
      * @param userAgent    客户端 User-Agent
      */
-    public void logout(String accessToken, Long userId, String deviceId,
-                       String ip, String userAgent) {
-        // 将 Access Token 加入黑名单
+    public void logout(String accessToken, String refreshToken, String ip, String userAgent) {
+        // Access Token 加入黑名单
         if (accessToken != null && jwtTokenProvider.validateToken(accessToken)) {
             String tokenId = jwtTokenProvider.getTokenId(accessToken);
             tokenBlacklistService.blacklist(tokenId, jwtTokenProvider.getExpirationDate(accessToken));
         }
 
-        // 删除 Refresh Token（精确到设备或全部设备）
-        if (deviceId != null && !deviceId.isBlank()) {
-            refreshTokenService.deleteRefreshToken(userId, deviceId);
-        } else {
-            refreshTokenService.deleteAllUserTokens(userId);
+        // Refresh Token 从 Redis 删除
+        if (refreshToken != null && !refreshToken.isBlank()) {
+            String deviceId = deriveDeviceId(userAgent);
+            refreshTokenService.deleteRefreshToken(refreshToken, deviceId);
         }
 
-        User user = userMapper.selectById(userId);
-        String username = user != null ? user.getUsername() : String.valueOf(userId);
+        // Access Token 中提取 userId 用于日志
+        Long userId = null;
+        String username = "unknown";
+        if (accessToken != null && jwtTokenProvider.validateToken(accessToken)) {
+            userId = jwtTokenProvider.getUserId(accessToken);
+            username = jwtTokenProvider.getUsername(accessToken);
+        }
         recordLoginLog(userId, username, "LOGOUT", ip, userAgent, 1, null);
-
-        log.info("User logged out: userId={}, deviceId={}", userId,
-                deviceId != null ? deviceId : "ALL");
+        log.info("User logged out: userId={}", userId);
     }
 
     private void recordLoginLog(Long userId, String username, String loginType,
@@ -238,14 +233,16 @@ public class AuthService {
         loginLogMapper.insert((LoginLog) logEntry);
     }
 
+    private String getUserName(Long userId) {
+        User user = userMapper.selectById(userId);
+        return user != null ? user.getUsername() : String.valueOf(userId);
+    }
+
     /**
-     * 解析设备标识
-     * <p>优先使用客户端传入的 deviceId，否则对 User-Agent 做 SHA-256 取前 16 位</p>
+     * 从 User-Agent 推导设备标识（SHA-256 前 16 位）
+     * <p>同一浏览器同一版本 → 相同 deviceId → 自动命中同一 Redis Key</p>
      */
-    private String resolveDeviceId(String clientDeviceId, String userAgent) {
-        if (clientDeviceId != null && !clientDeviceId.isBlank()) {
-            return clientDeviceId;
-        }
+    private String deriveDeviceId(String userAgent) {
         if (userAgent == null || userAgent.isBlank()) {
             return "unknown";
         }

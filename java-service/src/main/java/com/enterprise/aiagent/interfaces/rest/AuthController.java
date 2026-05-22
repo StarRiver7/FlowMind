@@ -6,14 +6,14 @@ import com.enterprise.aiagent.domain.model.req.RefreshTokenReq;
 import com.enterprise.aiagent.domain.model.req.RegisterReq;
 import com.enterprise.aiagent.domain.model.vo.LoginVO;
 import com.enterprise.aiagent.infrastructure.common.Result;
-import com.enterprise.aiagent.infrastructure.security.JwtTokenProvider;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 
 @Tag(name = "认证管理", description = "用户注册、登录、Token管理")
 @RestController
@@ -22,7 +22,6 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
-    private final JwtTokenProvider jwtTokenProvider;
 
     @Operation(summary = "用户注册")
     @PostMapping("/register")
@@ -31,7 +30,7 @@ public class AuthController {
         return Result.success("注册成功");
     }
 
-    @Operation(summary = "用户登录 — 返回 Access Token + Refresh Token + deviceId")
+    @Operation(summary = "用户登录 — 返回 Access Token + Refresh Token")
     @PostMapping("/login")
     public Result<LoginVO> login(@Valid @RequestBody LoginReq req, HttpServletRequest request) {
         String ip = getClientIp(request);
@@ -40,32 +39,24 @@ public class AuthController {
         return Result.success(vo);
     }
 
-    @Operation(summary = "刷新Token — 使用 Redis 中的 Refresh Token 轮换新令牌对")
+    @Operation(summary = "刷新Token — 只需传入 refreshToken")
     @PostMapping("/refresh")
     public Result<LoginVO> refresh(@Valid @RequestBody RefreshTokenReq req, HttpServletRequest request) {
         String ip = getClientIp(request);
         String userAgent = request.getHeader("User-Agent");
-        LoginVO vo = authService.refreshToken(
-                req.getUserId(), req.getDeviceId(), req.getRefreshToken(), ip, userAgent);
+        LoginVO vo = authService.refreshToken(req.getRefreshToken(), ip, userAgent);
         return Result.success(vo);
     }
 
-    @Operation(summary = "退出登录 — Access Token 加入黑名单 + 删除 Refresh Token")
+    @Operation(summary = "退出登录 — Access Token 加入黑名单，Refresh Token 从 Redis 删除")
     @PostMapping("/logout")
-    public Result<Void> logout(@RequestParam(required = false) String deviceId,
+    public Result<Void> logout(@RequestBody(required = false) RefreshTokenReq req,
                                HttpServletRequest request) {
         String accessToken = extractToken(request);
+        String refreshToken = req != null ? req.getRefreshToken() : null;
         String ip = getClientIp(request);
         String userAgent = request.getHeader("User-Agent");
-
-        Long userId = null;
-        if (StringUtils.hasText(accessToken) && jwtTokenProvider.validateToken(accessToken)) {
-            userId = jwtTokenProvider.getUserId(accessToken);
-        }
-
-        if (userId != null) {
-            authService.logout(accessToken, userId, deviceId, ip, userAgent);
-        }
+        authService.logout(accessToken, refreshToken, ip, userAgent);
         return Result.success("已登出");
     }
 

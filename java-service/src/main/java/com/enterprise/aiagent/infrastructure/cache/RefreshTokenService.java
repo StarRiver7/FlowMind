@@ -3,62 +3,34 @@ package com.enterprise.aiagent.infrastructure.cache;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.util.Collections;
-import java.util.UUID;
 
 /**
  * Refresh Token 服务 — 基于 Redis 的刷新令牌管理
  *
- * <p>设计原则（企业级有状态+无状态混合认证）：</p>
- * <ul>
- *   <li>Refresh Token 以不透明字符串（UUID）存入 Redis，不使用 JWT</li>
- *   <li>Redis Key 格式：refresh_token:{userId}:{deviceId}</li>
- *   <li>每次刷新时执行原子 Lua 脚本：验证 → 轮换新令牌 → 重置 TTL</li>
- *   <li>滑动刷新：剩余有效期 &lt; 总有效期 1/4 时自动延长 TTL</li>
- *   <li>强制登出时直接删除 Key，实现即时失效</li>
- * </ul>
+ * <p>令牌格式：{userId}:{randomUUID}，userId 编码在令牌前缀中，后端自解析。</p>
+ * <p>Redis Key：refresh_token:{userId}:{deviceId}，deviceId 由 User-Agent 自动推导。</p>
  *
- * @see com.enterprise.aiagent.infrastructure.security.JwtTokenProvider
+ * <p>滑动刷新策略（遵循 08-token 存储方案）：</p>
+ * <ul>
+ *   <li>刷新 access token 时，不轮换 refresh token 值，仅检查并延长 Redis TTL</li>
+ *   <li>当剩余 TTL &lt; 总 TTL × 1/4 时，自动重置为完整 7 天</li>
+ *   <li>同一 refresh token 在整个会话周期内保持不变，前端只需存储一次</li>
+ * </ul>
  */
 @Slf4j
 @Service
 public class RefreshTokenService {
 
     private static final String KEY_PREFIX = "refresh_token:";
+    private static final String TOKEN_SEPARATOR = ":";
 
-    /** 滑动刷新阈值：剩余有效期低于此比例时自动延长 */
+    /** 滑动刷新阈值：剩余 TTL 低于此比例时自动延长（1/4 = 25%） */
     private static final double SLIDING_REFRESH_THRESHOLD = 0.25;
 
-    /**
-     * Lua 脚本：原子性地验证 + 轮换 Refresh Token
-     * <p>
-     * KEYS[1]：refresh_token key
-     * ARGV[1]：期望的旧令牌值
-     * ARGV[2]：新令牌值
-     * ARGV[3]：TTL（秒）
-     * </p>
-     * <p>
-     * 返回值：1 = 成功，nil = 失败（令牌不存在或不匹配）
-     * </p>
-     */
-    private static final String REFRESH_LUA_SCRIPT = """
-            local current = redis.call('GET', KEYS[1])
-            if current == false then
-                return nil
-            end
-            if current ~= ARGV[1] then
-                return nil
-            end
-            redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
-            return 1
-            """;
-
     private final RedisTemplate<String, Object> redisTemplate;
-    private final DefaultRedisScript<Long> refreshScript;
     private final long refreshTokenTtlSeconds;
 
     public RefreshTokenService(
@@ -66,100 +38,84 @@ public class RefreshTokenService {
             @Value("${jwt.refresh-expiration}") long refreshExpirationMs) {
         this.redisTemplate = redisTemplate;
         this.refreshTokenTtlSeconds = refreshExpirationMs / 1000;
-
-        this.refreshScript = new DefaultRedisScript<>();
-        this.refreshScript.setScriptText(REFRESH_LUA_SCRIPT);
-        this.refreshScript.setResultType(Long.class);
     }
 
     /**
-     * 生成新的不透明 Refresh Token 并存入 Redis
+     * 生成新的 Refresh Token 并存入 Redis
+     * <p>令牌格式：{userId}:{randomUUID}</p>
      *
      * @param userId   用户ID
-     * @param deviceId 设备标识（用于多端登录隔离）
-     * @return 生成的 Refresh Token 字符串
+     * @param deviceId 设备标识（由 User-Agent 推导）
+     * @return Refresh Token 字符串
      */
     public String createRefreshToken(Long userId, String deviceId) {
-        String token = UUID.randomUUID().toString().replace("-", "");
+        String uuid = java.util.UUID.randomUUID().toString().replace("-", "");
+        String token = userId + TOKEN_SEPARATOR + uuid;
         String key = buildKey(userId, deviceId);
         redisTemplate.opsForValue().set(key, token, Duration.ofSeconds(refreshTokenTtlSeconds));
-        log.debug("Refresh token created: userId={}, deviceId={}, key={}", userId, deviceId, key);
+        log.debug("Refresh token created: userId={}, deviceId={}", userId, deviceId);
         return token;
     }
 
     /**
-     * 验证并轮换 Refresh Token（原子操作）
+     * 从令牌中解析 userId
+     */
+    public Long parseUserId(String token) {
+        if (token == null || !token.contains(TOKEN_SEPARATOR)) {
+            return null;
+        }
+        try {
+            return Long.parseLong(token.substring(0, token.indexOf(TOKEN_SEPARATOR)));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 验证 Refresh Token 并执行滑动刷新
      * <p>
-     * 验证旧令牌 → 若有效则生成新令牌替换 → 重置 TTL
-     * 使用 Lua 脚本保证并发安全
+     * 验证逻辑：GET Redis Key → 比对令牌值 → 检查 TTL → 必要时延长
+     * 令牌值不变，仅可能延长 TTL，避免了令牌轮换带来的并发竞态问题。
      * </p>
      *
-     * @param userId       用户ID
-     * @param deviceId     设备标识
-     * @param oldToken     旧 Refresh Token
-     * @return 新的 Refresh Token；验证失败返回 null
-     */
-    public String rotateRefreshToken(Long userId, String deviceId, String oldToken) {
-        String newToken = UUID.randomUUID().toString().replace("-", "");
-        String key = buildKey(userId, deviceId);
-
-        Long result = redisTemplate.execute(
-                refreshScript,
-                Collections.singletonList(key),
-                oldToken,
-                newToken,
-                String.valueOf(refreshTokenTtlSeconds)
-        );
-
-        if (result != null && result == 1L) {
-            log.debug("Refresh token rotated: userId={}, deviceId={}", userId, deviceId);
-            return newToken;
-        }
-        log.warn("Refresh token rotation failed: userId={}, deviceId={}", userId, deviceId);
-        return null;
-    }
-
-    /**
-     * 验证 Refresh Token 是否有效（不轮换，仅检查）
-     *
-     * @param userId   用户ID
-     * @param deviceId 设备标识
      * @param token    待验证的 Refresh Token
-     * @return true 如果令牌存在且匹配
-     */
-    public boolean validateRefreshToken(Long userId, String deviceId, String token) {
-        String key = buildKey(userId, deviceId);
-        String stored = (String) redisTemplate.opsForValue().get(key);
-        boolean valid = token != null && token.equals(stored);
-        if (!valid) {
-            log.debug("Refresh token validation failed: userId={}, deviceId={}", userId, deviceId);
-        }
-        return valid;
-    }
-
-    /**
-     * 检查是否需要进行滑动刷新（剩余 TTL &lt; 总 TTL × 阈值）
-     *
-     * @param userId   用户ID
      * @param deviceId 设备标识
-     * @return true 表示需要延长 TTL
+     * @return true 表示验证通过（含滑动刷新成功），false 表示令牌无效或已过期
      */
-    public boolean needsSlidingRefresh(Long userId, String deviceId) {
-        String key = buildKey(userId, deviceId);
-        Long ttl = redisTemplate.getExpire(key);
-        if (ttl == null || ttl < 0) {
+    public boolean validateAndExtendTtl(String token, String deviceId) {
+        Long userId = parseUserId(token);
+        if (userId == null) {
             return false;
         }
-        return ttl < refreshTokenTtlSeconds * SLIDING_REFRESH_THRESHOLD;
+        String key = buildKey(userId, deviceId);
+        String stored = (String) redisTemplate.opsForValue().get(key);
+
+        // 令牌不存在或不匹配
+        if (stored == null || !stored.equals(token)) {
+            log.debug("Refresh token validation failed: userId={}, deviceId={}", userId, deviceId);
+            return false;
+        }
+
+        // 滑动刷新：剩余 TTL < 阈值时，重置为完整 TTL
+        Long currentTtl = redisTemplate.getExpire(key);
+        if (currentTtl != null && currentTtl > 0
+                && currentTtl < refreshTokenTtlSeconds * SLIDING_REFRESH_THRESHOLD) {
+            redisTemplate.expire(key, Duration.ofSeconds(refreshTokenTtlSeconds));
+            log.debug("Refresh token TTL extended (sliding refresh): userId={}, deviceId={}, oldTtl={}s",
+                    userId, deviceId, currentTtl);
+        }
+
+        return true;
     }
 
     /**
-     * 强制删除 Refresh Token（登出时调用）
-     *
-     * @param userId   用户ID
-     * @param deviceId 设备标识
+     * 删除 Refresh Token（登出时调用）
      */
-    public void deleteRefreshToken(Long userId, String deviceId) {
+    public void deleteRefreshToken(String token, String deviceId) {
+        Long userId = parseUserId(token);
+        if (userId == null) {
+            return;
+        }
         String key = buildKey(userId, deviceId);
         Boolean deleted = redisTemplate.delete(key);
         if (Boolean.TRUE.equals(deleted)) {
@@ -169,8 +125,6 @@ public class RefreshTokenService {
 
     /**
      * 删除用户所有设备的 Refresh Token（全局强制登出）
-     *
-     * @param userId 用户ID
      */
     public void deleteAllUserTokens(Long userId) {
         String pattern = KEY_PREFIX + userId + ":*";
@@ -181,7 +135,6 @@ public class RefreshTokenService {
         }
     }
 
-    /** 构建 Redis Key */
     private String buildKey(Long userId, String deviceId) {
         return KEY_PREFIX + userId + ":" + deviceId;
     }

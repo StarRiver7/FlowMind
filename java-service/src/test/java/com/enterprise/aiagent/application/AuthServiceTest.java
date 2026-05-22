@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -57,7 +57,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("注册成功 — 用户名和邮箱均未占用")
+    @DisplayName("注册成功")
     void shouldRegisterSuccessfully() {
         RegisterReq req = new RegisterReq();
         req.setUsername("newuser");
@@ -67,7 +67,7 @@ class AuthServiceTest {
         when(userMapper.findByUsername("newuser")).thenReturn(Optional.empty());
         when(userMapper.findByEmail("new@example.com")).thenReturn(Optional.empty());
         when(passwordEncoder.encode("password123")).thenReturn("$2a$10$encoded");
-        doReturn(1).when(userMapper).insert(any(User.class));
+        when(userMapper.insert(any(User.class))).thenReturn(1);
 
         assertDoesNotThrow(() -> authService.register(req));
         verify(userMapper).insert((com.enterprise.aiagent.domain.model.entity.User) any());
@@ -88,7 +88,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("登录成功 — 返回 Access Token + Refresh Token + deviceId")
+    @DisplayName("登录成功 — 返回双 Token")
     void shouldLoginSuccessfully() {
         LoginReq req = new LoginReq();
         req.setUsername("testuser");
@@ -101,21 +101,19 @@ class AuthServiceTest {
                 .thenReturn("access-token");
         when(jwtTokenProvider.getExpiration()).thenReturn(900000L);
         when(refreshTokenService.createRefreshToken(eq(1L), anyString()))
-                .thenReturn("redis-refresh-token");
+                .thenReturn("1:abc123def456");
 
         LoginVO vo = authService.login(req, "127.0.0.1", "JUnit/5.0");
 
         assertNotNull(vo);
         assertEquals("access-token", vo.getAccessToken());
-        assertEquals("redis-refresh-token", vo.getRefreshToken());
-        assertNotNull(vo.getDeviceId());
+        assertEquals("1:abc123def456", vo.getRefreshToken());
         assertEquals("Bearer", vo.getTokenType());
-        assertEquals("testuser", vo.getUserInfo().getUsername());
         assertEquals(900L, vo.getExpiresIn());
+        assertEquals("testuser", vo.getUserInfo().getUsername());
 
         verify(refreshTokenService).createRefreshToken(eq(1L), anyString());
     }
-
     @Test
     @DisplayName("登录失败 — 密码错误")
     void shouldFailWhenPasswordWrong() {
@@ -145,34 +143,41 @@ class AuthServiceTest {
                 () -> authService.login(req, "127.0.0.1", "JUnit"));
     }
 
+
+
     @Test
-    @DisplayName("刷新Token成功 — Redis验证通过并轮换")
+    @DisplayName("刷新Token成功 — 不轮换refreshToken，仅延长TTL")
     void shouldRefreshTokenSuccessfully() {
+        String refreshToken = "1:existing-token";
+
+        when(refreshTokenService.validateAndExtendTtl(eq(refreshToken), anyString()))
+                .thenReturn(true);
+        when(refreshTokenService.parseUserId(refreshToken)).thenReturn(1L);
         when(userMapper.selectById(1L)).thenReturn(mockUser);
-        when(refreshTokenService.rotateRefreshToken(1L, "device-1", "old-refresh"))
-                .thenReturn("new-refresh");
         when(userMapper.findRoleCodesByUserId(1L)).thenReturn(List.of("employee"));
         when(jwtTokenProvider.generateAccessToken(1L, "testuser", List.of("employee")))
                 .thenReturn("new-access");
         when(jwtTokenProvider.getExpiration()).thenReturn(900000L);
 
-        LoginVO vo = authService.refreshToken(1L, "device-1", "old-refresh", "127.0.0.1", "JUnit");
+        LoginVO vo = authService.refreshToken(refreshToken, "127.0.0.1", "JUnit/5.0");
 
         assertNotNull(vo);
         assertEquals("new-access", vo.getAccessToken());
-        assertEquals("new-refresh", vo.getRefreshToken());
-        assertEquals("device-1", vo.getDeviceId());
-        verify(refreshTokenService).rotateRefreshToken(1L, "device-1", "old-refresh");
+        // refreshToken 值不变
+        assertEquals(refreshToken, vo.getRefreshToken());
+        verify(refreshTokenService).validateAndExtendTtl(eq(refreshToken), anyString());
     }
 
     @Test
-    @DisplayName("刷新Token失败 — Refresh Token无效")
+    @DisplayName("刷新Token失败 — Refresh Token 无效")
     void shouldFailWhenRefreshTokenInvalid() {
-        when(userMapper.selectById(1L)).thenReturn(mockUser);
-        when(refreshTokenService.rotateRefreshToken(1L, "device-1", "bad-token"))
-                .thenReturn(null);
+        String refreshToken = "1:bad-token";
+
+        when(refreshTokenService.validateAndExtendTtl(eq(refreshToken), anyString()))
+                .thenReturn(false);
+        when(refreshTokenService.parseUserId(refreshToken)).thenReturn(1L);
 
         assertThrows(BusinessException.class,
-                () -> authService.refreshToken(1L, "device-1", "bad-token", "127.0.0.1", "JUnit"));
+                () -> authService.refreshToken(refreshToken, "127.0.0.1", "JUnit"));
     }
 }

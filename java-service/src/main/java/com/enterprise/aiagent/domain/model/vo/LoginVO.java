@@ -14,9 +14,6 @@ public class LoginVO {
 
     private String refreshToken;
 
-    /** 设备标识，刷新 Token 时必须回传 */
-    private String deviceId;
-
     private String tokenType;
 
     /** Access Token 过期时间（秒） */

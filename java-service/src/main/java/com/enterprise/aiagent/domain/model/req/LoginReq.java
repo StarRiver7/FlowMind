@@ -17,7 +17,4 @@ public class LoginReq {
     @NotBlank(message = "密码不能为空")
     @Size(min = 6, max = 128, message = "密码长度6-128位")
     private String password;
-
-    /** 设备标识（可选），用于多端登录隔离；未提供时自动从 User-Agent 生成 */
-    private String deviceId;
 }
