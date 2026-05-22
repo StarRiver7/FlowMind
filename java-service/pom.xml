@@ -11,12 +11,12 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.enterprise</groupId>
-    <artifactId>ai-agent-java-service</artifactId>
+    <groupId>com.company</groupId>
+    <artifactId>aiplatform</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
-    <name>Enterprise AI Agent - Java Service</name>
-    <description>Core business backend: orchestration, transaction control, persistence</description>
+    <name>AiPlatform - Java Core Service</name>
+    <description>AiPlatform core backend: orchestration, transaction control, persistence</description>
 
     <properties>
         <java.version>17</java.version>

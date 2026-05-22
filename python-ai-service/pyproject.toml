@@ -42,7 +42,7 @@ black = "^24.10.0"
 pre-commit = "^4.0.0"
 
 [tool.poetry.scripts]
-start = "src.main:main"
+start = "app.main:main"
 
 [build-system]
 requires = ["poetry-core"]
@@ -57,7 +57,7 @@ select = ["E", "F", "I", "N", "W", "UP"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests"]
+testpaths = ["app/tests"]
 
 [tool.mypy]
 python_version = "3.11"

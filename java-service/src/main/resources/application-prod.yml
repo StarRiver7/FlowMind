@@ -40,7 +40,7 @@ spring:
 
 logging:
   level:
-    com.enterprise.aiagent: WARN
+    com.company.aiplatform: WARN
     org.springframework: WARN
   file:
     path: /var/log/java-service

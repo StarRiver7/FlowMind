@@ -44,7 +44,7 @@
     </appender>
 
     <!-- 应用日志 -->
-    <logger name="com.enterprise.aiagent" level="DEBUG"/>
+    <logger name="com.company.aiplatform" level="DEBUG"/>
 
     <!-- Spring -->
     <logger name="org.springframework.web" level="INFO"/>
