@@ -54,9 +54,4 @@ jwt:
   refresh-expiration: 604800000
 
 # === App Config ===
-app:
-  ai-service:
-    base-url: http://localhost:8000
-    grpc-host: localhost
-    grpc-port: 50051
-    timeout: 60s
+# ai.backend 配置已移至 application.yml

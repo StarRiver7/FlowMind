@@ -2,7 +2,8 @@ package com.company.aiplatform.user.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.company.aiplatform.user.service.UserService;
+import com.company.aiplatform.user.service.IUserService;
+import com.company.aiplatform.user.service.impl.UserServiceImpl;
 import com.company.aiplatform.auth.entity.User;
 import com.company.aiplatform.auth.dto.AssignRoleReq;
 import com.company.aiplatform.user.vo.UserVO;
@@ -32,7 +33,7 @@ class UserServiceTest {
     @Mock private UserRoleMapper userRoleMapper;
 
     @InjectMocks
-    private UserService userService;
+    private UserServiceImpl userService;
 
     private User mockUser;
 

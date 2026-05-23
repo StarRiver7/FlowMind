@@ -1,6 +1,6 @@
 package com.company.aiplatform.auth.controller;
 
-import com.company.aiplatform.auth.service.AuthService;
+import com.company.aiplatform.auth.service.IAuthService;
 import com.company.aiplatform.auth.dto.LoginReq;
 import com.company.aiplatform.auth.dto.RefreshTokenReq;
 import com.company.aiplatform.auth.dto.RegisterReq;
@@ -21,12 +21,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final AuthService authService;
+    private final IAuthService iAuthService;
 
     @Operation(summary = "用户注册")
     @PostMapping("/register")
     public Result<Void> register(@Valid @RequestBody RegisterReq req) {
-        authService.register(req);
+        iAuthService.register(req);
         return Result.success("注册成功");
     }
 
@@ -35,7 +35,7 @@ public class AuthController {
     public Result<LoginVO> login(@Valid @RequestBody LoginReq req, HttpServletRequest request) {
         String ip = getClientIp(request);
         String userAgent = request.getHeader("User-Agent");
-        LoginVO vo = authService.login(req, ip, userAgent);
+        LoginVO vo = iAuthService.login(req, ip, userAgent);
         return Result.success(vo);
     }
 
@@ -44,7 +44,7 @@ public class AuthController {
     public Result<LoginVO> refresh(@Valid @RequestBody RefreshTokenReq req, HttpServletRequest request) {
         String ip = getClientIp(request);
         String userAgent = request.getHeader("User-Agent");
-        LoginVO vo = authService.refreshToken(req.getRefreshToken(), ip, userAgent);
+        LoginVO vo = iAuthService.refreshToken(req.getRefreshToken(), ip, userAgent);
         return Result.success(vo);
     }
 
@@ -56,10 +56,11 @@ public class AuthController {
         String refreshToken = req != null ? req.getRefreshToken() : null;
         String ip = getClientIp(request);
         String userAgent = request.getHeader("User-Agent");
-        authService.logout(accessToken, refreshToken, ip, userAgent);
+        iAuthService.logout(accessToken, refreshToken, ip, userAgent);
         return Result.success("已登出");
     }
 
+    // 获取客户端IP地址
     private String getClientIp(HttpServletRequest request) {
         String ip = request.getHeader("X-Forwarded-For");
         if (ip == null || ip.isBlank() || "unknown".equalsIgnoreCase(ip)) {
@@ -74,6 +75,7 @@ public class AuthController {
         return ip;
     }
 
+    // 从请求头中提取Token
     private String extractToken(HttpServletRequest request) {
         String bearer = request.getHeader("Authorization");
         if (StringUtils.hasText(bearer) && bearer.startsWith("Bearer ")) {

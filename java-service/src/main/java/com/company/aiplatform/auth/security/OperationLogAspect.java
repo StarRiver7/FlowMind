@@ -101,6 +101,7 @@ public class OperationLogAspect {
         return ip;
     }
 
+    //
     private String extractToken(HttpServletRequest request) {
         String bearer = request.getHeader("Authorization");
         if (StringUtils.hasText(bearer) && bearer.startsWith("Bearer ")) {

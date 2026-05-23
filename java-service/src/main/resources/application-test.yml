@@ -27,7 +27,7 @@ jwt:
   expiration: 3600000
   refresh-expiration: 86400000
 
-app:
-  ai-service:
-    base-url: http://localhost:8000
-    timeout: 10s
+ai:
+  backend:
+    url: http://localhost:8000
+    api-key: test-api-key

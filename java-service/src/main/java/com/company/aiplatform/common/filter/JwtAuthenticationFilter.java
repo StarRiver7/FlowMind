@@ -1,6 +1,6 @@
 package com.company.aiplatform.common.filter;
 
-import com.company.aiplatform.auth.service.TokenBlacklistService;
+import com.company.aiplatform.auth.service.ITokenBlacklistService;
 import com.company.aiplatform.auth.security.JwtTokenProvider;
 import com.company.aiplatform.auth.security.UserDetailsServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,7 +26,7 @@ import java.io.IOException;
  * 认证链路：提取 Bearer Token → 校验签名/过期 → 检查黑名单 → 加载用户 → 设置 SecurityContext
  * </p>
  *
- * @see TokenBlacklistService
+ * @see ITokenBlacklistService
  * @see JwtTokenProvider
  */
 @Slf4j
@@ -36,15 +36,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final UserDetailsServiceImpl userDetailsService;
-    private final TokenBlacklistService tokenBlacklistService;
-    private final ObjectMapper objectMapper;
+    private final ITokenBlacklistService tokenBlacklistService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         try {
-            String token = extractToken(request);
+            String token = getTokenFromRequest(request);
             if (!StringUtils.hasText(token)) {
                 filterChain.doFilter(request, response);
                 return;
@@ -86,7 +85,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     /**
      * 从请求头提取 Bearer Token（遵循全局规则 6.4 节）
      */
-    private String extractToken(HttpServletRequest request) {
+    private String getTokenFromRequest(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
             return bearerToken.substring(7);

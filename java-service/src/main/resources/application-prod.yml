@@ -50,3 +50,10 @@ jwt:
   issuer: enterprise-ai-agent-platform
   expiration: 900000
   refresh-expiration: 604800000
+
+
+# === App Config ===
+ai:
+  backend:
+    url: ${AI_SERVICE_URL:http://python-ai-service:8000}
+    api-key: ${AI_SERVICE_API_KEY}

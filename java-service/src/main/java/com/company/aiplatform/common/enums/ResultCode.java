@@ -15,7 +15,11 @@ public enum ResultCode {
     TOO_MANY_REQUESTS(429, "请求频率超限"),
     INTERNAL_ERROR(500, "服务器内部错误"),
     AI_SERVICE_UNAVAILABLE(503, "AI服务暂不可用"),
-    BUSINESS_ERROR(1000, "业务处理异常");
+    BUSINESS_ERROR(1000, "业务处理异常"),
+    LOGIN_FAILED(1001, "登录失败"),
+    PERMISSION_DENIED(1002, "权限不足"),
+    UPLOAD_FAILED(1006, "上传失败"),
+    FILE_NOT_FOUND(1007, "文件未找到");
 
     private final int code;
     private final String message;

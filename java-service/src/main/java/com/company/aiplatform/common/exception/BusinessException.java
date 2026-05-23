@@ -3,6 +3,7 @@ package com.company.aiplatform.common.exception;
 import com.company.aiplatform.common.enums.ResultCode;
 import lombok.Getter;
 
+
 @Getter
 public class BusinessException extends RuntimeException {
 

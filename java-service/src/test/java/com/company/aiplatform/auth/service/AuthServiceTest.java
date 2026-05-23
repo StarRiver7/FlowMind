@@ -1,6 +1,6 @@
 package com.company.aiplatform.auth.service;
 
-import com.company.aiplatform.auth.service.AuthService;
+import com.company.aiplatform.auth.service.IAuthService;
 import com.company.aiplatform.auth.entity.User;
 import com.company.aiplatform.auth.dto.LoginReq;
 import com.company.aiplatform.auth.dto.RegisterReq;
@@ -8,8 +8,9 @@ import com.company.aiplatform.auth.vo.LoginVO;
 import com.company.aiplatform.auth.mapper.LoginLogMapper;
 import com.company.aiplatform.auth.mapper.UserMapper;
 import com.company.aiplatform.auth.mapper.UserRoleMapper;
-import com.company.aiplatform.auth.service.RefreshTokenService;
-import com.company.aiplatform.auth.service.TokenBlacklistService;
+import com.company.aiplatform.auth.service.IRefreshTokenService;
+import com.company.aiplatform.auth.service.ITokenBlacklistService;
+import com.company.aiplatform.auth.service.impl.AuthServiceImpl;
 import com.company.aiplatform.common.exception.BusinessException;
 import com.company.aiplatform.auth.security.JwtTokenProvider;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,11 +38,11 @@ class AuthServiceTest {
     @Mock private LoginLogMapper loginLogMapper;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private JwtTokenProvider jwtTokenProvider;
-    @Mock private RefreshTokenService refreshTokenService;
-    @Mock private TokenBlacklistService tokenBlacklistService;
+    @Mock private IRefreshTokenService refreshTokenService;
+    @Mock private ITokenBlacklistService tokenBlacklistService;
 
     @InjectMocks
-    private AuthService authService;
+    private AuthServiceImpl authService;
 
     private User mockUser;
 
@@ -100,7 +101,7 @@ class AuthServiceTest {
         when(jwtTokenProvider.generateAccessToken(1L, "testuser", List.of("employee")))
                 .thenReturn("access-token");
         when(jwtTokenProvider.getExpiration()).thenReturn(900000L);
-        when(refreshTokenService.createRefreshToken(eq(1L), anyString()))
+        when(refreshTokenService.generateRefreshToken(eq(1L), anyString()))
                 .thenReturn("1:abc123def456");
 
         LoginVO vo = authService.login(req, "127.0.0.1", "JUnit/5.0");
@@ -112,7 +113,7 @@ class AuthServiceTest {
         assertEquals(900L, vo.getExpiresIn());
         assertEquals("testuser", vo.getUserInfo().getUsername());
 
-        verify(refreshTokenService).createRefreshToken(eq(1L), anyString());
+        verify(refreshTokenService).generateRefreshToken(eq(1L), anyString());
     }
     @Test
     @DisplayName("登录失败 — 密码错误")

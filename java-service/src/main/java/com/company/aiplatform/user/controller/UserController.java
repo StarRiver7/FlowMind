@@ -3,6 +3,7 @@ package com.company.aiplatform.user.controller;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.company.aiplatform.auth.dto.AssignRoleReq;
 import com.company.aiplatform.auth.vo.LoginVO;
+import com.company.aiplatform.user.service.IUserService;
 import com.company.aiplatform.user.vo.UserVO;
 import com.company.aiplatform.common.result.Result;
 import com.company.aiplatform.auth.security.JwtTokenProvider;
@@ -24,7 +25,7 @@ import java.security.Principal;
 @RequiredArgsConstructor
 public class UserController {
 
-    private final UserService userService;
+    private final IUserService iUserService;
     private final JwtTokenProvider jwtTokenProvider;
 
     @Operation(summary = "用户列表（分页）")
@@ -34,7 +35,7 @@ public class UserController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(required = false) String keyword) {
-        IPage<UserVO> result = userService.listUsers(page, pageSize, keyword);
+        IPage<UserVO> result = iUserService.listUsers(page, pageSize, keyword);
         return Result.success(result);
     }
 
@@ -42,7 +43,7 @@ public class UserController {
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public Result<UserVO> detail(@PathVariable Long id) {
-        UserVO vo = userService.getUserDetail(id);
+        UserVO vo = iUserService.getUserDetail(id);
         return Result.success(vo);
     }
 
@@ -50,7 +51,7 @@ public class UserController {
     @PostMapping("/roles")
     @PreAuthorize("hasRole('ADMIN')")
     public Result<Void> assignRoles(@Valid @RequestBody AssignRoleReq req) {
-        userService.assignRoles(req);
+        iUserService.assignRoles(req);
         return Result.success("角色分配成功");
     }
 
@@ -58,7 +59,7 @@ public class UserController {
     @PutMapping("/{id}/status")
     @PreAuthorize("hasRole('ADMIN')")
     public Result<Void> toggleStatus(@PathVariable Long id, @RequestParam Integer status) {
-        userService.toggleUserStatus(id, status);
+        iUserService.toggleUserStatus(id, status);
         return Result.success(status == 1 ? "用户已启用" : "用户已禁用");
     }
 

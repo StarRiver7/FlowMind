@@ -21,7 +21,7 @@ import java.util.UUID;
  * - Refresh Token：移交给 RefreshTokenService，存入 Redis 实现服务端管控
  * </p>
  *
- * @see com.company.aiplatform.auth.service.RefreshTokenService
+ * @see com.company.aiplatform.auth.service.IRefreshTokenService
  */
 @Slf4j
 @Component
