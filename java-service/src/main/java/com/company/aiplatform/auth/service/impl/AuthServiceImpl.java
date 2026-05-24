@@ -167,7 +167,7 @@ public class AuthServiceImpl implements IAuthService {
         String newAccessToken = jwtTokenProvider.generateAccessToken(userId, user.getUsername(), roles);
 
         recordLoginLog(userId, user.getUsername(), "REFRESH", ip, userAgent, 1, null);
-        log.info("Token refreshed: userId={}, deviceId={}", userId, deviceId);
+        log.info("Token 被刷新: userId={}, deviceId={}", userId, deviceId);
 
         // refreshToken 值不变，原样返回
         return LoginVO.builder()
@@ -216,7 +216,7 @@ public class AuthServiceImpl implements IAuthService {
             username = jwtTokenProvider.getUsername(accessToken);
         }
         recordLoginLog(userId, username, "LOGOUT", ip, userAgent, 1, null);
-        log.info("【用户登出】: userId={}", userId);
+        log.info("用户登出: userId={}", userId);
     }
 
     private void recordLoginLog(Long userId, String username, String loginType,
@@ -229,7 +229,7 @@ public class AuthServiceImpl implements IAuthService {
         logEntry.setUserAgent(userAgent);
         logEntry.setStatus(status);
         logEntry.setFailReason(failReason);
-        loginLogMapper.insert((LoginLog) logEntry);
+        loginLogMapper.insert(logEntry);
     }
 
     private String getUserName(Long userId) {

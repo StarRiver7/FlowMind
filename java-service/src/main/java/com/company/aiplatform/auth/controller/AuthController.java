@@ -39,7 +39,7 @@ public class AuthController {
         return Result.success(vo);
     }
 
-    @Operation(summary = "刷新Token — 只需传入 refreshToken")
+    @Operation(summary = "刷新Token — 传入refreshToken")
     @PostMapping("/refresh")
     public Result<LoginVO> refresh(@Valid @RequestBody RefreshTokenReq req, HttpServletRequest request) {
         String ip = getClientIp(request);

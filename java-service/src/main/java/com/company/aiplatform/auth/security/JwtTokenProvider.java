@@ -120,8 +120,20 @@ public class JwtTokenProvider {
         try {
             parseClaims(token);
             return true;
+        } catch (ExpiredJwtException e) {
+            log.warn("JWT 已过期: {}", e.getMessage());
+            return false;
+        } catch (UnsupportedJwtException e) {
+            log.warn("JWT 不支持: {}", e.getMessage());
+            return false;
+        } catch (MalformedJwtException e) {
+            log.warn("JWT 格式错误: {}", e.getMessage());
+            return false;
+        } catch (SignatureException e) {
+            log.warn("JWT 签名验证失败: {}", e.getMessage());
+            return false;
         } catch (JwtException | IllegalArgumentException e) {
-            log.debug("JWT validation failed: {}", e.getMessage());
+            log.warn("JWT 验证失败: {} - {}", e.getClass().getSimpleName(), e.getMessage());
             return false;
         }
     }

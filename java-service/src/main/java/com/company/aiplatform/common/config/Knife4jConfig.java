@@ -22,7 +22,7 @@ public class Knife4jConfig {
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("Enterprise AI Agent Platform API")
+                        .title("FlowMind（Enterprise AI Agent Platform）API")
                         .version("1.0.0")
                         .description("企业级AI Agent智能办公平台 — Java Core Backend")
                         .contact(new Contact()
@@ -38,6 +38,6 @@ public class Knife4jConfig {
                                 .scheme("bearer")
                                 .bearerFormat("JWT")
                                 .in(SecurityScheme.In.HEADER)
-                                .description("请输入 JWT Token（不包含 'Bearer ' 前缀），例如：eyJhbGciOiJIUzI1NiJ9...")));
+                                .description("请输入 JWT Token")));
     }
 }

@@ -33,12 +33,12 @@ public class TokenBlacklistServiceImpl implements ITokenBlacklistService {
     public void blacklist(String tokenId, Date expirationDate) {
         long remainingMs = expirationDate.getTime() - Instant.now().toEpochMilli();
         if (remainingMs <= 0) {
-            log.debug("Token already expired, skip blacklist: jti={}", tokenId);
+            log.debug("Token已经过期，无法加入黑名单: jti={}", tokenId);
             return;
         }
         String key = buildKey(tokenId);
         redisTemplate.opsForValue().set(key, "1", Duration.ofMillis(remainingMs));
-        log.info("Access token blacklisted: jti={}, ttl={}s", tokenId, remainingMs / 1000);
+        log.info("Access token 已经加入黑名单: jti={}, ttl={}s", tokenId, remainingMs / 1000);
     }
 
     /**
@@ -50,8 +50,7 @@ public class TokenBlacklistServiceImpl implements ITokenBlacklistService {
     @Override
     public boolean isBlacklisted(String tokenId) {
         String key = buildKey(tokenId);
-        Boolean exists = redisTemplate.hasKey(key);
-        return Boolean.TRUE.equals(exists);
+        return redisTemplate.hasKey(key);
     }
 
     /**

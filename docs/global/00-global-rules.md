@@ -9,7 +9,7 @@
 
 | 属性   | 值                                           |
 | ---- | ------------------------------------------- |
-| 项目名称 | Enterprise AI Agent Platform                |
+| 项目名称 | FlowMind                                    |
 | 简称   | AI Agent智能办公平台                              |
 | 架构模式 | 微服务 — Java Core Backend + Python AI Service |
 | 前端技术 | Vue 3 + Element Plus                        |

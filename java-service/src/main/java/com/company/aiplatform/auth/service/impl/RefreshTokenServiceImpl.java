@@ -43,12 +43,16 @@ public class RefreshTokenServiceImpl implements IRefreshTokenService {
         String token = userId + TOKEN_SEPARATOR + uuid;
         String key = buildKey(userId, deviceId);
         redisTemplate.opsForValue().set(key, token, Duration.ofSeconds(refreshTokenTtlSeconds));
-        log.debug("Refresh token created: userId={}, deviceId={}", userId, deviceId);
+        log.debug("Refresh token 创建成功: userId={}, deviceId={}", userId, deviceId);
         return token;
     }
 
     /**
      * 从令牌中解析 userId
+     * <p>令牌格式：{userId}:{randomUUID}</p>
+     *
+     * @param token Refresh Token 字符串
+     * @return userId 解析出的用户ID，如果令牌格式错误则返回 null
      */
     @Override
     public Long parseUserId(String token) {
@@ -77,6 +81,7 @@ public class RefreshTokenServiceImpl implements IRefreshTokenService {
     public boolean validateAndExtendTtl(String token, String deviceId) {
         Long userId = parseUserId(token);
         if (userId == null) {
+            log.warn("Refresh token 解析失败: token={}", token);
             return false;
         }
         String key = buildKey(userId, deviceId);
@@ -84,24 +89,27 @@ public class RefreshTokenServiceImpl implements IRefreshTokenService {
 
         // 令牌不存在或不匹配
         if (stored == null || !stored.equals(token)) {
-            log.debug("Refresh token validation failed: userId={}, deviceId={}", userId, deviceId);
+            log.warn("Refresh token 验证失败: userId={}, deviceId={}, token={}, stored={}",
+                    userId, deviceId, token, stored);
             return false;
         }
 
         // 滑动刷新：剩余 TTL < 阈值时，重置为完整 TTL
         Long currentTtl = redisTemplate.getExpire(key);
-        if (currentTtl != null && currentTtl > 0
-                && currentTtl < refreshTokenTtlSeconds * SLIDING_REFRESH_THRESHOLD) {
+        if (currentTtl > 0 && currentTtl < refreshTokenTtlSeconds * SLIDING_REFRESH_THRESHOLD) {
             redisTemplate.expire(key, Duration.ofSeconds(refreshTokenTtlSeconds));
-            log.debug("Refresh token TTL extended (sliding refresh): userId={}, deviceId={}, oldTtl={}s",
+            log.debug("Refresh token TTL 被延长: userId={}, deviceId={}, oldTtl={}s",
                     userId, deviceId, currentTtl);
         }
 
         return true;
     }
 
+
     /**
      * 删除 Refresh Token（登出时调用）
+     * @param token    Refresh Token 字符串
+     * @param deviceId 设备标识（由 User-Agent 推导）
      */
     @Override
     public void deleteRefreshToken(String token, String deviceId) {
@@ -110,22 +118,22 @@ public class RefreshTokenServiceImpl implements IRefreshTokenService {
             return;
         }
         String key = buildKey(userId, deviceId);
-        Boolean deleted = redisTemplate.delete(key);
-        if (Boolean.TRUE.equals(deleted)) {
-            log.info("Refresh token deleted (logout): userId={}, deviceId={}", userId, deviceId);
+        if (redisTemplate.delete(key)) {
+            log.info("Refresh token 因为登出操作已被删除: userId={}, deviceId={}", userId, deviceId);
         }
     }
 
     /**
      * 删除用户所有设备的 Refresh Token（全局强制登出）
+     * @param userId 用户ID
      */
     @Override
     public void deleteAllUserTokens(Long userId) {
         String pattern = KEY_PREFIX + userId + ":*";
         var keys = redisTemplate.keys(pattern);
-        if (keys != null && !keys.isEmpty()) {
+        if (!keys.isEmpty()) {
             Long deleted = redisTemplate.delete(keys);
-            log.info("All refresh tokens deleted for user: userId={}, count={}", userId, deleted);
+            log.info("删除用户所有设备的 Refresh Token（全局强制登出）: userId={}, count={}", userId, deleted);
         }
     }
 
