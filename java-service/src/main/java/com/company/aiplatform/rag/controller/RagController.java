@@ -8,19 +8,23 @@ import com.company.aiplatform.common.result.Result;
 import com.company.aiplatform.rag.entity.Document;
 import com.company.aiplatform.rag.service.DocumentService;
 import com.company.aiplatform.user.entity.ChatRequest;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
 
+@Tag(name = "文档管理", description = "文档管理相关接口")
 @RestController
-@RequestMapping("/api/documents")
+@RequestMapping("/api/v1/documents")
 @RequiredArgsConstructor
 public class RagController {
 
     private final DocumentService documentService;
 
+    @Operation(summary = "分页查询用户的文档列表")
     //  分页查询用户的文档列表
     @GetMapping
     public Result<Page<Document>> listDocuments(
@@ -31,6 +35,7 @@ public class RagController {
         return Result.success(page);
     }
 
+    @Operation(summary = "上传文档（仅管理员）")
     /**
      * 上传文档（仅管理员）
      */
@@ -47,6 +52,7 @@ public class RagController {
         }
     }
 
+    @Operation(summary = "删除文档")
     //  删除文档
     @DeleteMapping("/{id}")
     public Result<Void> deleteDocument(
@@ -57,6 +63,7 @@ public class RagController {
 
     }
 
+    @Operation(summary = "ai聊天")
     //  ai聊天
     @PostMapping("/chat")
     public Result<Map<String, Object>> chat(

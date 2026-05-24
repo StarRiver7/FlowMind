@@ -159,18 +159,20 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
             docIds = baseMapper.selectAccessibleDocumentIds(userId);
         }
 
-        Map<String, Object> response = aiBackendClient.chat(query, 5, docIds);
+        // 调用 AI 后端获取对话响应
+        com.company.aiplatform.thirdparty.dto.AIChatResponse response = aiBackendClient.chat(userId, query, 5, docIds);
 
+        // 保存聊天历史
         ChatHistory history = new ChatHistory();
         history.setUserId(userId);
         history.setQuery(query);
-        history.setAnswer((String) response.get("answer"));
-        Object sources = response.get("sources");
-        history.setSourceDocuments(sources != null ? sources.toString() : null);
+        history.setAnswer(response.getContent());
+        history.setSourceDocuments(response.getSources() != null ? response.getSources().toString() : null);
 
+        // 构建返回结果
         Map<String, Object> result = new HashMap<>();
-        result.put("answer", response.get("answer"));
-        result.put("sources", response.get("sources"));
+        result.put("answer", response.getContent());
+        result.put("sources", response.getSources());
         return result;
     }
 
@@ -189,7 +191,7 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
 
         // 删除 AI 后端索引
         try {
-            aiBackendClient.deleteDocument(documentId);
+            aiBackendClient.deleteDocumentAsync(documentId).subscribe();
         } catch (Exception e) {
             log.error("删除 AI 后端文档索引失败: {}", documentId, e);
             // 不抛出异常，继续删除本地文件

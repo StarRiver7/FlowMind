@@ -26,7 +26,6 @@ import java.security.Principal;
 public class UserController {
 
     private final IUserService iUserService;
-    private final JwtTokenProvider jwtTokenProvider;
 
     @Operation(summary = "用户列表（分页）")
     @GetMapping
@@ -63,8 +62,12 @@ public class UserController {
         return Result.success(status == 1 ? "用户已启用" : "用户已禁用");
     }
 
-    @Operation(summary = "获取当前用户信息")
+    @Operation(
+        summary = "获取当前用户信息",
+        description = "获取当前登录用户的基本信息，需要从请求头携带 Token"
+    )
     @GetMapping("/me")
+    @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
     public Result<LoginVO.UserInfo> currentUser(Principal principal) {
         // 从 JWT 返回当前用户基本信息
         return Result.success(LoginVO.UserInfo.builder()

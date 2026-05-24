@@ -6,7 +6,6 @@ from app.agents.chat_agent import agent_executor
 
 router = APIRouter(prefix="/ai", tags=["AI Chat"])
 
-
 @router.post("/chat")
 async def chat(req: ChatRequest, request: Request):
     """AI对话 — SSE流式返回"""
