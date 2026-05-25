@@ -24,25 +24,25 @@ const rightPanelTab = ref<'sources' | 'trace'>('sources')
       <ChatPanel />
     </main>
 
-    <!-- Right: Sources / Trace Panel -->
+    <!-- Right: ???? / ???? Panel -->
     <aside class="workspace-panel">
       <div class="panel-tabs">
         <button
           :class="['panel-tab', { active: rightPanelTab === 'sources' }]"
           @click="rightPanelTab = 'sources'"
         >
-          Sources
+          ????
         </button>
         <button
           :class="['panel-tab', { active: rightPanelTab === 'trace' }]"
           @click="rightPanelTab = 'trace'"
         >
-          Trace
+          ????
         </button>
       </div>
       <div class="panel-content">
         <SourcePanel v-if="rightPanelTab === 'sources'" />
-        <AgentTracePanel v-if="rightPanelTab === 'trace'" />
+        <Agent????Panel v-if="rightPanelTab === 'trace'" />
       </div>
     </aside>
   </div>

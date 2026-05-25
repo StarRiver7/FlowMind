@@ -34,7 +34,7 @@ async function handleSelect(id: string) {
       </div>
       <button class="new-chat-btn" @click="handleNew">
         <span class="btn-icon">+</span>
-        New Chat
+        新建会话
       </button>
     </div>
 
@@ -43,7 +43,7 @@ async function handleSelect(id: string) {
       <input
         type="text"
         class="search-input"
-        placeholder="Search conversations..."
+        placeholder="搜索会话..."
       />
     </div>
 
@@ -57,8 +57,8 @@ async function handleSelect(id: string) {
         @select="handleSelect(conv.conversation_id)"
       />
       <div v-if="convStore.conversations.length === 0" class="empty-list">
-        <p>No conversations yet</p>
-        <p class="hint">Start a new chat to begin</p>
+        <p>暂无会话</p>
+        <p class="hint">点击上方按钮开始新会话</p>
       </div>
     </div>
   </div>

@@ -25,7 +25,7 @@ const hasSources = computed(() => (props.message.sources?.length || 0) > 0)
       <div :class="['msg-bubble', { user: isUser, thinking: message.thinking }]">
         <!-- Thinking state -->
         <div v-if="message.thinking" class="thinking-text">
-          <span class="thinking-dots">{{ message.content || 'Thinking...' }}</span>
+          <span class="thinking-dots">{{ message.content || '思考中...' }}</span>
         </div>
 
         <!-- Content -->
@@ -39,9 +39,9 @@ const hasSources = computed(() => (props.message.sources?.length || 0) > 0)
         </div>
       </div>
 
-      <!-- Sources -->
+      <!-- 引用来源 -->
       <div v-if="hasSources && !message.streaming" class="msg-sources">
-        <div class="sources-label">Sources</div>
+        <div class="sources-label">引用来源</div>
         <div
           v-for="(src, i) in message.sources"
           :key="i"
@@ -125,7 +125,7 @@ const hasSources = computed(() => (props.message.sources?.length || 0) > 0)
   word-break: break-word;
 }
 
-/* Sources */
+/* 引用来源 */
 .msg-sources {
   margin-top: 6px;
   padding: 8px 10px;

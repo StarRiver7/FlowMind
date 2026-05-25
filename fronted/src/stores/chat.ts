@@ -104,9 +104,9 @@ export const useChatStore = defineStore('chat', () => {
     addMessage(aiMsg)
 
     // Setup agent trace
-    addTraceStep({ node: 'Intent Classification', status: 'pending', timestamp: Date.now() })
-    addTraceStep({ node: 'RAG Retrieval', status: 'pending', timestamp: Date.now() })
-    addTraceStep({ node: 'LLM Generation', status: 'pending', timestamp: Date.now() })
+    addTraceStep({ node: '意图识别', status: 'pending', timestamp: Date.now() })
+    addTraceStep({ node: '知识库检索', status: 'pending', timestamp: Date.now() })
+    addTraceStep({ node: 'LLM ??', status: 'pending', timestamp: Date.now() })
 
     const controller = createSSEConnection(
       request,
@@ -127,13 +127,13 @@ export const useChatStore = defineStore('chat', () => {
   function handleSSEEvent(event: SSEEvent) {
     switch (event.type) {
       case 'thinking':
-        updateTraceStep('Intent Classification', { status: 'running' })
-        if (event.content?.includes('knowledge') || event.content?.includes('Searching')) {
-          updateTraceStep('Intent Classification', { status: 'completed', output: event.content })
-          updateTraceStep('RAG Retrieval', { status: 'running' })
-        } else if (event.content?.includes('Generating')) {
-          updateTraceStep('RAG Retrieval', { status: 'completed' })
-          updateTraceStep('LLM Generation', { status: 'running' })
+        updateTraceStep('意图识别', { status: 'running' })
+        if (event.content?.includes('??') || event.content?.includes('??')) {
+          updateTraceStep('意图识别', { status: 'completed', output: event.content })
+          updateTraceStep('知识库检索', { status: 'running' })
+        } else if (event.content?.includes('??')) {
+          updateTraceStep('知识库检索', { status: 'completed' })
+          updateTraceStep('LLM ??', { status: 'running' })
         }
         setLastThinking(event.content || '')
         break
@@ -143,16 +143,16 @@ export const useChatStore = defineStore('chat', () => {
         break
 
       case 'done':
-        updateTraceStep('LLM Generation', {
+        updateTraceStep('LLM ??', {
           status: 'completed',
-          output: 'Response generated',
+          output: '回复已生成',
         })
         finishLastMessage(event.sources || [], event.intent || 'chat')
         break
 
       case 'error':
-        error.value = event.content || 'Unknown error'
-        updateTraceStep('LLM Generation', { status: 'error', output: event.content })
+        error.value = event.content || '未知错误'
+        updateTraceStep('LLM ??', { status: 'error', output: event.content })
         finishLastMessage([], 'chat')
         break
     }

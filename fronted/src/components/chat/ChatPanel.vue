@@ -60,20 +60,20 @@ function handleStop() {
       <!-- Welcome -->
       <div v-if="!chatStore.hasMessages" class="welcome">
         <div class="welcome-icon">&#x1F9E0;</div>
-        <h2>FlowMind AI Workspace</h2>
-        <p>Enterprise AI assistant with RAG-powered knowledge retrieval.</p>
+        <h2>FlowMind AI 工作台</h2>
+        <p>企业级 AI 助手，支持知识库检索与智能问答</p>
         <div class="welcome-hints">
           <div class="hint-item" @click="handleSend('What is the data retention policy?')">
             <span class="hint-icon">&#x1F4CB;</span>
-            <span>Policy lookup</span>
+            <span>查找政策</span>
           </div>
           <div class="hint-item" @click="handleSend('Explain the API authentication flow')">
             <span class="hint-icon">&#x1F510;</span>
-            <span>Auth flow</span>
+            <span>认证流程</span>
           </div>
           <div class="hint-item" @click="handleSend('Summarize the deployment architecture')">
             <span class="hint-icon">&#x2601;</span>
-            <span>Architecture</span>
+            <span>系统架构</span>
           </div>
         </div>
       </div>

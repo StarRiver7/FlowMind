@@ -33,9 +33,9 @@ function formatTime(iso: string): string {
       <span v-else>&#9675;</span>
     </div>
     <div class="conv-info">
-      <div class="conv-title">{{ conversation.title || 'New Conversation' }}</div>
+      <div class="conv-title">{{ conversation.title || '新会话' }}</div>
       <div class="conv-meta">
-        <span>{{ conversation.message_count || 0 }} msgs</span>
+        <span>{{ conversation.message_count || 0 }} 条消息</span>
         <span class="conv-time">{{ formatTime(conversation.updated_at) }}</span>
       </div>
     </div>

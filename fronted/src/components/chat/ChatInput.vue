@@ -41,7 +41,7 @@ function autoResize() {
         ref="textareaRef"
         v-model="inputText"
         class="input-field"
-        placeholder="Type your message... (Enter to send, Shift+Enter for newline)"
+        placeholder="输入消息...（Enter 发送，Shift+Enter 换行）"
         rows="1"
         :disabled="streaming"
         @keydown="handleKeydown"
@@ -55,7 +55,7 @@ function autoResize() {
           @click="emit('stop')"
         >
           <span class="stop-icon">&#9632;</span>
-          Stop
+          停止
         </button>
         <button
           v-else
@@ -69,7 +69,7 @@ function autoResize() {
     </div>
 
     <div class="input-footer">
-      <span class="footer-hint">FlowMind v2.0 — RAG + Tools enabled</span>
+      <span class="footer-hint">FlowMind v2.0 — 知识库 + 工具已启用</span>
     </div>
   </div>
 </template>

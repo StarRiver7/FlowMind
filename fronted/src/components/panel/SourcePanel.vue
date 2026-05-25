@@ -18,14 +18,14 @@ function scoreClass(score: number): string {
 <template>
   <div class="source-panel">
     <div class="panel-header">
-      <h3>Source Citations</h3>
+      <h3>引用来源</h3>
       <span class="badge">{{ sources.length }}</span>
     </div>
 
     <div v-if="sources.length === 0" class="empty-state">
       <div class="empty-icon">&#x1F4C4;</div>
-      <p>No sources yet</p>
-      <p class="sub">References will appear here when the AI uses the knowledge base</p>
+      <p>暂无引用来源</p>
+      <p class="sub">当 AI 使用知识库回答时，引用来源将在此显示</p>
     </div>
 
     <div v-else class="source-list">

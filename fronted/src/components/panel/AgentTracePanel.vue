@@ -8,19 +8,28 @@ import { computed } from 'vue'
 const chatStore = useChatStore()
 const steps = computed(() => chatStore.traceSteps)
 
+function statusText(status: string): string {
+  switch (status) {
+        case 'pending': return '等待中'
+        case 'running': return '执行中'
+        case 'completed': return '已完成'
+    case 'error': return '??'
+    default: return status
+  }
+}
 function statusIcon(status: string): string {
   switch (status) {
-    case 'running': return '\u23F3'
-    case 'completed': return '\u2705'
-    case 'error': return '\u274C'
+        case '等待中': return '\u23F8'
+        case '执行中': return '\u23F3'
+    case '??': return '\u274C'
     default: return '\u23F8'
   }
 }
 function statusColor(status: string): string {
   switch (status) {
-    case 'running': return 'var(--accent-blue)'
-    case 'completed': return 'var(--accent-green)'
-    case 'error': return 'var(--danger)'
+        case '等待中': return 'var(--text-muted)'
+        case '执行中': return 'var(--accent-blue)'
+    case '??': return 'var(--danger)'
     default: return 'var(--text-muted)'
   }
 }
@@ -29,14 +38,14 @@ function statusColor(status: string): string {
 <template>
   <div class="trace-panel">
     <div class="panel-header">
-      <h3>Agent Execution Trace</h3>
-      <span class="badge">{{ steps.filter(s => s.status !== 'pending').length }}/{{ steps.length }}</span>
+      <h3>Agent 执行链路</h3>
+      <span class="badge">{{ steps.filter(s => s.status !== '等待中').length }}/{{ steps.length }}</span>
     </div>
 
     <div v-if="steps.length === 0" class="empty-state">
       <div class="empty-icon">&#x1F50D;</div>
-      <p>No trace data</p>
-      <p class="sub">Agent execution steps will appear during streaming</p>
+      <p>暂无执行数据</p>
+      <p class="sub">流式响应时，Agent 执行步骤将在此显示</p>
     </div>
 
     <div v-else class="trace-list">
@@ -50,7 +59,7 @@ function statusColor(status: string): string {
             <span class="trace-icon">{{ statusIcon(step.status) }}</span>
             <span class="trace-node">{{ step.node }}</span>
             <span class="trace-status" :style="{ color: statusColor(step.status) }">
-              {{ step.status }}
+              {{ statusText(step.status) }}
             </span>
           </div>
           <div v-if="step.output" class="trace-output">{{ step.output }}</div>
