@@ -3,8 +3,8 @@
 <!-- ============================================================ -->
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
-import { useChatStore } from '@/stores/chat'
-import { useConversationStore } from '@/stores/conversation'
+import { useChatStore } from '@/store/chat'
+import { useConversationStore } from '@/store/conversation'
 import ChatMessage from './ChatMessage.vue'
 import ChatInput from './ChatInput.vue'
 

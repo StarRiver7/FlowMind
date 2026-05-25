@@ -3,8 +3,8 @@
 <!-- ============================================================ -->
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { useConversationStore } from '@/stores/conversation'
-import { useChatStore } from '@/stores/chat'
+import { useConversationStore } from '@/store/conversation'
+import { useChatStore } from '@/store/chat'
 import ConversationItem from './ConversationItem.vue'
 
 const convStore = useConversationStore()

@@ -1,6 +1,45 @@
 // ============================================================
-// FlowMind AI Workspace — Type Definitions
+// FlowMind — API Type Definitions
 // ============================================================
+
+/** SpringBoot unified response wrapper */
+export interface Result<T = unknown> {
+  code: number
+  message: string
+  data: T
+  timestamp: number
+  traceId?: string
+}
+
+/** JWT login request */
+export interface LoginReq {
+  username: string
+  password: string
+}
+
+/** JWT login response */
+export interface LoginVO {
+  accessToken: string
+  refreshToken: string
+  tokenType: string
+  expiresIn: number
+  userInfo: UserInfo
+}
+
+export interface UserInfo {
+  id: number
+  username: string
+  nickname: string
+  email: string
+  avatarUrl: string
+}
+
+/** Refresh token request */
+export interface RefreshTokenReq {
+  refreshToken: string
+}
+
+// ---- Chat / AI types (existing) ----
 
 export interface Conversation {
   conversation_id: string
@@ -48,13 +87,6 @@ export interface ChatRequest {
   model?: string
 }
 
-export interface ApiResponse<T> {
-  code: number
-  message: string
-  data: T
-  timestamp: number
-}
-
 export interface AgentTraceStep {
   node: string
   status: 'pending' | 'running' | 'completed' | 'error'
@@ -62,4 +94,10 @@ export interface AgentTraceStep {
   output?: string
   duration_ms?: number
   timestamp: number
+}
+
+/** User permission / role info */
+export interface UserPermission {
+  roles: string[]
+  permissions: string[]
 }

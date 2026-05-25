@@ -2,7 +2,7 @@
 <!-- AgentTracePanel — LangGraph execution trace visualization     -->
 <!-- ============================================================ -->
 <script setup lang="ts">
-import { useChatStore } from '@/stores/chat'
+import { useChatStore } from '@/store/chat'
 import { computed } from 'vue'
 
 const chatStore = useChatStore()
