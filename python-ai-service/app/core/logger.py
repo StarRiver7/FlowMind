@@ -1,31 +1,28 @@
 import logging
 import sys
-from logging.handlers import RotatingFileHandler
-
-LOG_FORMAT = "%(asctime)s [%(threadName)s] %(levelname)-5s %(name)s - %(message)s"
-DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
 def setup_logging(level: str = "INFO", log_file: str | None = None):
-    root_logger = logging.getLogger()
-    root_logger.setLevel(getattr(logging, level.upper()))
+    fmt = logging.Formatter(
+        "%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(fmt)
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.addHandler(handler)
+    root.setLevel(getattr(logging, level.upper(), logging.INFO))
 
-    # Console handler
-    console = logging.StreamHandler(sys.stdout)
-    console.setFormatter(logging.Formatter(LOG_FORMAT, DATE_FORMAT))
-    root_logger.addHandler(console)
-
-    # File handler (production)
     if log_file:
-        file_handler = RotatingFileHandler(
-            log_file, maxBytes=100 * 1024 * 1024, backupCount=10
-        )
-        file_handler.setFormatter(logging.Formatter(LOG_FORMAT, DATE_FORMAT))
-        root_logger.addHandler(file_handler)
+        fh = logging.FileHandler(log_file, encoding="utf-8")
+        fh.setFormatter(fmt)
+        root.addHandler(fh)
 
-    # Reduce noisy loggers
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("openai").setLevel(logging.WARNING)
-    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+    # Silence noisy libraries
+    for name in ("httpx", "openai", "urllib3", "pymysql"):
+        logging.getLogger(name).setLevel(logging.WARNING)
 
-    return root_logger
+
+def get_logger(name: str) -> logging.Logger:
+    return logging.getLogger(name)

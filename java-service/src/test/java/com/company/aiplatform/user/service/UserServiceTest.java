@@ -3,7 +3,7 @@ package com.company.aiplatform.user.service;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.aiplatform.user.service.IUserService;
-import com.company.aiplatform.user.service.impl.UserServiceImpl;
+import com.company.aiplatform.user.service.impl.IUserServiceImpl;
 import com.company.aiplatform.auth.entity.User;
 import com.company.aiplatform.auth.dto.AssignRoleReq;
 import com.company.aiplatform.user.vo.UserVO;
@@ -26,14 +26,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("UserService 单元测试")
+@DisplayName("UserService Unit Tests")
 class UserServiceTest {
 
     @Mock private UserMapper userMapper;
     @Mock private UserRoleMapper userRoleMapper;
 
     @InjectMocks
-    private UserServiceImpl userService;
+    private IUserServiceImpl userService;
 
     private User mockUser;
 
@@ -49,7 +49,7 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("分页查询用户列表 — 返回用户VO含角色")
+    @DisplayName("should list users with roles")
     void shouldListUsersWithRoles() {
         Page<User> mpPage = new Page<>(1, 20);
         mpPage.setRecords(List.of(mockUser));
@@ -66,7 +66,7 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("获取用户详情成功")
+    @DisplayName("should get user detail")
     void shouldGetUserDetail() {
         when(userMapper.selectById(1L)).thenReturn(mockUser);
         when(userMapper.findRoleCodesByUserId(1L)).thenReturn(List.of("admin"));
@@ -78,14 +78,14 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("获取不存在用户抛出异常")
+    @DisplayName("should throw when user not found")
     void shouldThrowWhenUserNotFound() {
         when(userMapper.selectById(999L)).thenReturn(null);
         assertThrows(BusinessException.class, () -> userService.getUserDetail(999L));
     }
 
     @Test
-    @DisplayName("分配角色 — 先删后插")
+    @DisplayName("should assign roles")
     void shouldAssignRoles() {
         AssignRoleReq req = new AssignRoleReq();
         req.setUserId(1L);
@@ -100,7 +100,7 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("切换用户状态")
+    @DisplayName("should toggle user status")
     void shouldToggleUserStatus() {
         when(userMapper.selectById(1L)).thenReturn(mockUser);
         when(userMapper.updateById(mockUser)).thenReturn(1);

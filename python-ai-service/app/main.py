@@ -15,9 +15,8 @@ from app.api.v1.tool_api import router as tool_router
 from app.api.v1.workflow_api import router as workflow_router
 from app.common.exceptions.exceptions import AppException
 
-# 初始化日志
 log_level = "DEBUG" if settings.debug else "INFO"
-log_file = "logs/python-ai-service.log" if settings.env == "prod" else None
+log_file = "logs/flowmind-ai.log" if settings.env == "prod" else None
 setup_logging(level=log_level, log_file=log_file)
 logger = logging.getLogger(__name__)
 
@@ -30,9 +29,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Enterprise AI Agent - Python AI Service",
-    version="1.0.0",
-    description="Agent-RAG-Tool-Workflow",
+    title="FlowMind - Enterprise AI Service",
+    version="2.0.0",
+    description="Agent-RAG-Tool-Workflow engine with LangGraph routing",
     lifespan=lifespan,
 )
 
@@ -57,7 +56,7 @@ app.include_router(workflow_router)
 
 
 def main():
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=settings.debug, log_level="info")
+    uvicorn.run("app.main:app", host="0.0.0.0", port=settings.port, reload=settings.debug, log_level="info")
 
 
 if __name__ == "__main__":

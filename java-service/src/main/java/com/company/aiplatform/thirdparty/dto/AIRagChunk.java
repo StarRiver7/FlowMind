@@ -1,27 +1,38 @@
 package com.company.aiplatform.thirdparty.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import java.util.Map;
 
-/** RAG 检索结果中的单个文档块 */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class AIRagChunk {
 
-    @JsonProperty("chunk_id")
-    private String chunkId;
+    private Long id;
 
-    @JsonProperty("file_id")
-    private Integer fileId;
+    @JsonProperty("doc_id")
+    private String docId;
 
     private String content;
 
     private Double score;
 
-    private Object metadata;
+    @JsonProperty("rerank_score")
+    private Double rerankScore;
+
+    @JsonProperty("combined_score")
+    private Double combinedScore;
+
+    private Map<String, Object> metadata;
+
+    private Map<String, Object> citation;
+
+    private String excerpt;
 }

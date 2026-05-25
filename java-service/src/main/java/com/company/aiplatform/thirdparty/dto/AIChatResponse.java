@@ -5,10 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
 import java.util.List;
 
-/** AI 对话响应（非流式） */
 @Data
 @Builder
 @NoArgsConstructor
@@ -29,12 +27,7 @@ public class AIChatResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class SourceDoc {
-        @JsonProperty("chunk_id")
-        private String chunkId;
-        @JsonProperty("file_id")
-        private Integer fileId;
-        private String content;
+        private String file;
         private Double score;
-        private Object metadata;
     }
 }

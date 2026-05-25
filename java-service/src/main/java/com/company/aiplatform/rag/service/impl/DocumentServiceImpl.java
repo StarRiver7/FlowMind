@@ -52,12 +52,10 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
     @Override
     public Page<Document> listDocuments(Long userId, Integer pageNum, Integer pageSize) {
         List<Long> accessibleDocIds = baseMapper.selectAccessibleDocumentIds(userId);
-
         Page<Document> page = new Page<>(pageNum, pageSize);
         if (accessibleDocIds.isEmpty()) {
             return page;
         }
-
         return this.page(page, new LambdaQueryWrapper<Document>()
                 .in(Document::getId, accessibleDocIds)
                 .orderByDesc(Document::getCreateTime));
@@ -65,40 +63,31 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
 
     @Override
     public Document uploadDocument(Long userId, String title, MultipartFile file) throws IOException {
-        // 1. 校验文件
         if (file.isEmpty()) {
-            throw new RuntimeException("文件不能为空");
+            throw new RuntimeException("File cannot be empty");
         }
 
         String originalFilename = file.getOriginalFilename();
         if (originalFilename == null || originalFilename.trim().isEmpty()) {
-            throw new RuntimeException("文件名不能为空");
+            throw new RuntimeException("File name cannot be empty");
         }
 
-        // 2. 校验文件类型
         String fileExt = originalFilename.substring(originalFilename.lastIndexOf(".")).toLowerCase();
         List<String> allowedExts = List.of(".txt", ".pdf", ".doc", ".docx", ".md", ".csv", ".xlsx");
         if (!allowedExts.contains(fileExt)) {
-            throw new RuntimeException("不支持的文件类型: " + fileExt + "，仅支持: " + String.join(", ", allowedExts));
+            throw new RuntimeException("Unsupported file type: " + fileExt + ". Supported: " + String.join(", ", allowedExts));
         }
 
-        // 3. 校验文件大小（100MB）
         long maxSize = 100 * 1024 * 1024;
         if (file.getSize() > maxSize) {
-            throw new RuntimeException("文件大小不能超过 100MB");
+            throw new RuntimeException("File size must not exceed 100MB");
         }
 
-        // 4. 生成新文件名
         String newFileName = UUID.randomUUID() + fileExt;
-
         Path uploadDir = getUploadDir();
         Path destPath = uploadDir.resolve(newFileName);
-
-        log.info("Uploading file to: {}", destPath);
-
         File destFile = destPath.toFile();
         file.transferTo(destFile);
-
         String absolutePath = destPath.toString();
 
         Document document = new Document();
@@ -110,12 +99,14 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
         document.setUserId(userId);
         document.setStatus(0);
         document.setCreateTime(LocalDateTime.now());
+        document.setTenantId("default");
         this.save(document);
 
         DocumentPermission permission = new DocumentPermission();
         permission.setDocumentId(document.getId());
-        permission.setUserId(userId);
-        permission.setPermissionType(1);
+        permission.setPrincipalType("user");
+        permission.setPrincipalId(String.valueOf(userId));
+        permission.setPermission("write");
         permission.setCreateTime(LocalDateTime.now());
         documentPermissionMapper.insert(permission);
 
@@ -132,47 +123,47 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
             if (!file.exists()) {
                 log.error("File not found: {}", filePath);
                 Document document = this.getById(documentId);
-                document.setStatus(-1);
-                this.updateById(document);
+                if (document != null) {
+                    document.setStatus(-1);
+                    this.updateById(document);
+                }
                 return;
             }
 
-            Map<String, Object> result = aiBackendClient.processDocument(documentId, file, null);
+            Map<String, Object> result = aiBackendClient.indexDocumentAsync(
+                    documentId, filePath, null, "default"
+            ).block();
 
-            Document document = this.getById(documentId);
-            document.setStatus(1);
-            document.setChunksProcessed((Integer) result.get("chunks_processed"));
-            this.updateById(document);
-
-            log.info("Document {} processed successfully", documentId);
+            if (result != null) {
+                Document document = this.getById(documentId);
+                if (document != null) {
+                    document.setStatus(1);
+                    Integer chunkCount = (Integer) result.get("chunk_count");
+                    document.setChunksProcessed(chunkCount);
+                    this.updateById(document);
+                }
+                log.info("Document {} indexed: {} chunks", documentId, result.get("chunk_count"));
+            }
         } catch (Exception e) {
             log.error("Failed to process document {}", documentId, e);
             Document document = this.getById(documentId);
-            document.setStatus(-1);
-            this.updateById(document);
+            if (document != null) {
+                document.setStatus(-1);
+                this.updateById(document);
+            }
         }
     }
 
     @Override
     public Map<String, Object> chat(Long userId, String query, List<Long> docIds) {
-        if (docIds == null || docIds.isEmpty()) {
-            docIds = baseMapper.selectAccessibleDocumentIds(userId);
-        }
+        com.company.aiplatform.thirdparty.dto.AIChatResponse response =
+                aiBackendClient.chat(userId, null, query, true, true);
 
-        // 调用 AI 后端获取对话响应
-        com.company.aiplatform.thirdparty.dto.AIChatResponse response = aiBackendClient.chat(userId, query, 5, docIds);
-
-        // 保存聊天历史
-        ChatHistory history = new ChatHistory();
-        history.setUserId(userId);
-        history.setQuery(query);
-        history.setAnswer(response.getContent());
-        history.setSourceDocuments(response.getSources() != null ? response.getSources().toString() : null);
-
-        // 构建返回结果
         Map<String, Object> result = new HashMap<>();
         result.put("answer", response.getContent());
         result.put("sources", response.getSources());
+        result.put("intent", response.getIntent());
+        result.put("conversation_id", response.getConversationId());
         return result;
     }
 
@@ -180,27 +171,23 @@ public class DocumentServiceImpl extends ServiceImpl<DocumentMapper, Document> i
     public void deleteDocument(Long documentId, Long userId) {
         Document document = this.getById(documentId);
         if (document == null) {
-            throw new RuntimeException("文档不存在");
+            throw new RuntimeException("Document not found");
         }
         if (!document.getUserId().equals(userId)) {
-            throw new RuntimeException("无权删除此文档");
+            throw new RuntimeException("No permission to delete this document");
         }
 
-        // 删除数据库记录
         this.removeById(documentId);
 
-        // 删除 AI 后端索引
         try {
-            aiBackendClient.deleteDocumentAsync(documentId).subscribe();
+            aiBackendClient.deleteDocumentAsync(String.valueOf(documentId)).subscribe();
         } catch (Exception e) {
-            log.error("删除 AI 后端文档索引失败: {}", documentId, e);
-            // 不抛出异常，继续删除本地文件
+            log.error("Failed to delete AI backend index for document {}", documentId, e);
         }
 
-        // 删除本地文件
         File file = new File(document.getFilePath());
         if (file.exists() && !file.delete()) {
-            log.warn("删除本地文件失败: {}", document.getFilePath());
+            log.warn("Failed to delete local file: {}", document.getFilePath());
         }
     }
 }
