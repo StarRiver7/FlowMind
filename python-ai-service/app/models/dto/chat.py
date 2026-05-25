@@ -3,26 +3,44 @@ from typing import Optional, Literal
 
 
 class ChatRequest(BaseModel):
-    """Java服务转发来的对话请求"""
-    conversation_id: str = Field(..., description="对话ID")
-    user_id: str = Field(..., description="用户ID")
-    message: str = Field(..., min_length=1, max_length=32000, description="用户消息")
-    model: Optional[str] = Field(default=None, description="模型名称，不传则用默认")
-    stream: bool = Field(default=True, description="是否流式返回")
-    use_rag: bool = Field(default=True, description="是否启用知识库检索")
-    use_tools: bool = Field(default=True, description="是否允许工具调用")
+    """Chat request forwarded from Java service."""
+    conversation_id: str = Field(..., description="Conversation ID")
+    user_id: str = Field(..., description="User ID")
+    message: str = Field(..., min_length=1, max_length=32000, description="User message")
+    model: Optional[str] = Field(default=None, description="Model name, uses default if not set")
+    stream: bool = Field(default=True, description="Enable SSE streaming")
+    use_rag: bool = Field(default=True, description="Enable knowledge base search")
+    use_tools: bool = Field(default=True, description="Allow tool calls")
 
 
 class ChatMessage(BaseModel):
-    """对话中的单条消息"""
+    """Single message in a conversation."""
     role: Literal["user", "assistant", "system", "tool"]
     content: str
     metadata: Optional[dict] = None
 
 
+class SourceCitation(BaseModel):
+    """RAG source citation."""
+    file: str = ""
+    score: float = 0.0
+    excerpt: str = ""
+
+
 class ChatStreamChunk(BaseModel):
-    """SSE流式输出的单个chunk"""
-    content: str
+    """SSE streaming output chunk."""
+    type: Literal["thinking", "token", "done", "error"] = "token"
+    content: str = ""
     done: bool = False
     conversation_id: Optional[str] = None
+    intent: Optional[str] = None
+    sources: Optional[list[SourceCitation]] = None
     metadata: Optional[dict] = None
+
+
+class ChatResponse(BaseModel):
+    """Non-streaming chat response."""
+    content: str
+    conversation_id: str
+    intent: str = "chat"
+    sources: Optional[list[SourceCitation]] = None
