@@ -14,9 +14,9 @@ interface AuthenticationProps {
   loading?: boolean;
 
   /**
-   * @zh_CN 二维码登录路径
+   * @zh_CN 邮箱登录路径
    */
-  qrCodeLoginPath?: string;
+  emailLoginPath?: string;
 
   /**
    * @zh_CN 注册路径
@@ -33,9 +33,9 @@ interface AuthenticationProps {
   showForgetPassword?: boolean;
 
   /**
-   * @zh_CN 是否显示二维码登录
+   * @zh_CN 是否显示邮箱登录
    */
-  showQrcodeLogin?: boolean;
+  showEmailLogin?: boolean;
 
   /**
    * @zh_CN 是否显示注册按钮

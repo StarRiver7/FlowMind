@@ -22,7 +22,35 @@ const formSchema = computed((): VbenFormSchema[] => {
       },
       fieldName: 'username',
       label: $t('authentication.username'),
-      rules: z.string().min(1, { message: $t('authentication.usernameTip') }),
+      rules: z
+        .string()
+        .min(2, { message: $t('authentication.usernameTip') })
+        .max(64, { message: $t('authentication.usernameTip') }),
+    },
+    {
+      component: 'VbenInput',
+      componentProps: {
+        placeholder: $t('authentication.nicknameTip'),
+      },
+      fieldName: 'nickname',
+      label: $t('authentication.nickname'),
+      rules: z
+        .string()
+        .max(64, { message: $t('authentication.nicknameTip') })
+        .optional(),
+    },
+    {
+      component: 'VbenInput',
+      componentProps: {
+        placeholder: $t('authentication.registerEmailTip'),
+      },
+      fieldName: 'email',
+      label: $t('authentication.registerEmail'),
+      rules: z
+        .string()
+        .email({ message: $t('authentication.registerEmailValidErrorTip') })
+        .optional()
+        .or(z.literal('')),
     },
     {
       component: 'VbenInputPassword',
@@ -37,7 +65,9 @@ const formSchema = computed((): VbenFormSchema[] => {
           strengthText: () => $t('authentication.passwordStrength'),
         };
       },
-      rules: z.string().min(1, { message: $t('authentication.passwordTip') }),
+      rules: z
+        .string()
+        .min(6, { message: $t('authentication.passwordTip') }),
     },
     {
       component: 'VbenInputPassword',
@@ -49,7 +79,7 @@ const formSchema = computed((): VbenFormSchema[] => {
           const { password } = values;
           return z
             .string({ required_error: $t('authentication.passwordTip') })
-            .min(1, { message: $t('authentication.passwordTip') })
+            .min(6, { message: $t('authentication.passwordTip') })
             .refine((value) => value === password, {
               message: $t('authentication.confirmPasswordTip'),
             });
@@ -84,8 +114,13 @@ const formSchema = computed((): VbenFormSchema[] => {
 });
 
 function handleSubmit(value: Recordable<any>) {
-  const { username, password } = value;
-  authStore.authRegister({ username, password });
+  const { username, password, nickname, email } = value;
+  authStore.authRegister({
+    username,
+    password,
+    nickname: nickname || undefined,
+    email: email || undefined,
+  });
 }
 </script>
 

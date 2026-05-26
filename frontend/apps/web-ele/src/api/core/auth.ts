@@ -1,8 +1,9 @@
-﻿import { baseRequestClient, requestClient } from '#/api/request';
+import { baseRequestClient, requestClient } from '#/api/request';
 import type { JavaUserInfo, LoginResult } from './types';
 
 export namespace AuthApi {
   export interface LoginParams {
+    email?: string;
     password?: string;
     username?: string;
   }

@@ -65,12 +65,12 @@ const coreRoutes: RouteRecordRaw[] = [
         },
       },
       {
-        name: 'QrCodeLogin',
-        path: 'qrcode-login',
+        name: 'EmailLogin',
+        path: 'email-login',
         component: () =>
-          import('#/views/_core/authentication/qrcode-login.vue'),
+          import('#/views/_core/authentication/email-login.vue'),
         meta: {
-          title: $t('page.auth.qrcodeLogin'),
+          title: $t('page.auth.emailLogin'),
         },
       },
       {

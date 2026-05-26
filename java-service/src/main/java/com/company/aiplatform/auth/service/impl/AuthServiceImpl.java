@@ -80,8 +80,15 @@ public class AuthServiceImpl implements IAuthService {
     @Override
     @Transactional
     public LoginVO login(LoginReq req, String ip, String userAgent) {
-        User user = userMapper.findByUsername(req.getUsername())
-                .orElseThrow(() -> new BusinessException(ResultCode.UNAUTHORIZED, "用户名或密码错误"));
+        // 支持邮箱登录：优先使用邮箱查找，否则使用用户名
+        User user;
+        if (req.getEmail() != null && !req.getEmail().isBlank()) {
+            user = userMapper.findByEmail(req.getEmail())
+                    .orElseThrow(() -> new BusinessException(ResultCode.UNAUTHORIZED, "邮箱或密码错误"));
+        } else {
+            user = userMapper.findByUsername(req.getUsername())
+                    .orElseThrow(() -> new BusinessException(ResultCode.UNAUTHORIZED, "用户名或密码错误"));
+        }
 
         if (user.getStatus() == 0) {
             recordLoginLog(user.getId(), req.getUsername(), "LOGIN", ip, userAgent, 0, "用户已被禁用");

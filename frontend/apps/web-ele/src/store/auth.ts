@@ -81,10 +81,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /** 用户注册 */
-  async function authRegister(params: { password: string; username: string }) {
+  async function authRegister(params: { email?: string; nickname?: string; password: string; username: string }) {
     loginLoading.value = true;
     try {
-      await registerApi({ username: params.username, password: params.password });
+      await registerApi({ email: params.email, nickname: params.nickname, username: params.username, password: params.password });
       ElNotification({
         message: $t('authentication.registerSuccess'),
         title: $t('authentication.registerSuccess'),

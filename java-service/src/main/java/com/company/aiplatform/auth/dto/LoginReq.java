@@ -12,10 +12,12 @@ import lombok.Data;
 @Schema(description = "登录请求参数")
 public class LoginReq {
 
-    @NotBlank(message = "用户名不能为空")
-    @Size(min = 2, max = 64, message = "用户名长度2-64位")
     @Schema(description = "用户名", example = "admin")
     private String username;
+
+    @Size(max = 128, message = "邮箱最长128位")
+    @Schema(description = "邮箱（邮箱登录时使用）", example = "admin@flowmind.com")
+    private String email;
 
     @NotBlank(message = "密码不能为空")
     @Size(min = 6, max = 128, message = "密码长度6-128位")
