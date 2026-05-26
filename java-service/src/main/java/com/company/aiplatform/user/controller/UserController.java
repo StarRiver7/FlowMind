@@ -21,7 +21,7 @@ import java.security.Principal;
  */
 @Tag(name = "用户管理", description = "用户CRUD、角色分配")
 @RestController
-@RequestMapping("/api/v1/admin/users")
+@RequestMapping("/v1/admin/users")
 @RequiredArgsConstructor
 public class UserController {
 

@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 # 框架级配置 — 所有环境共享，不含环境变量占位符
 # 数据源/Redis/Kafka/JWT 等环境相关配置请见 application-{profile}.yml
 # ============================================================
@@ -9,15 +9,16 @@ spring:
     active: dev
   main:
     allow-bean-definition-overriding: true
-  web:
-    port: 8080
 
-  jackson:
-    serialization:
-      write-dates-as-timestamps: false
-    default-property-inclusion: non_null
-    date-format: yyyy-MM-dd HH:mm:ss
-    time-zone: Asia/Shanghai
+server:
+  port: 8080
+
+jackson:
+  serialization:
+    write-dates-as-timestamps: false
+  default-property-inclusion: non_null
+  date-format: yyyy-MM-dd HH:mm:ss
+  time-zone: Asia/Shanghai
 
 # === MyBatis Plus ===
 mybatis-plus:

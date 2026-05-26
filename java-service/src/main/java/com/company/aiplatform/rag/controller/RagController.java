@@ -18,7 +18,7 @@ import java.util.Map;
 
 @Tag(name = "文档管理", description = "文档管理相关接口")
 @RestController
-@RequestMapping("/api/v1/documents")
+@RequestMapping("/v1/documents")
 @RequiredArgsConstructor
 public class RagController {
 

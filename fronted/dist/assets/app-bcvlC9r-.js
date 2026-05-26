@@ -1,1 +1,0 @@
-import{i as g,m as e}from"./index-DFdyT3n-.js";const d=g("app",()=>{const t=e(!1),o=e(280),a=e(!0),i=e(320),n=e(!1);function s(){t.value=!t.value}function l(){a.value=!a.value}function r(u){n.value=u}return{sidebarCollapsed:t,sidebarWidth:o,rightPanelVisible:a,rightPanelWidth:i,pageLoading:n,toggleSidebar:s,toggleRightPanel:l,setPageLoading:r}});export{d as u};
