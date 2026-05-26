@@ -1,4 +1,4 @@
-import uvicorn
+﻿import uvicorn
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -11,27 +11,26 @@ from app.middleware.exception_middleware import app_exception_handler, general_e
 from app.api.v1.chat_api import router as chat_router
 from app.api.v1.rag_api import router as rag_router
 from app.api.v1.health_api import router as health_router
-from app.api.v1.tool_api import router as tool_router
-from app.api.v1.workflow_api import router as workflow_router
 from app.common.exceptions.exceptions import AppException
 
 log_level = "DEBUG" if settings.debug else "INFO"
-log_file = "logs/flowmind-ai.log" if settings.env == "prod" else None
+log_file = "logs/internsu-ai.log" if settings.env == "prod" else None
 setup_logging(level=log_level, log_file=log_file)
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info(f"[{settings.app_name}] Starting in {settings.env} mode...")
+    logger.info(f"[InternSU AI] Starting in {settings.env} mode...")
+    logger.info("  小SU 正在启动，准备帮老师们干活~")
     yield
-    logger.info(f"[{settings.app_name}] Shutting down...")
+    logger.info("[InternSU AI] 小SU 下班了~")
 
 
 app = FastAPI(
-    title="FlowMind - Enterprise AI Service",
-    version="2.0.0",
-    description="Agent-RAG-Tool-Workflow engine with LangGraph routing",
+    title="InternSU - 你的实习生同事 小su",
+    version="1.0.0",
+    description="企业内部 AI 实习生产品 - AI Engine",
     lifespan=lifespan,
 )
 
@@ -51,8 +50,6 @@ app.add_exception_handler(Exception, general_exception_handler)
 app.include_router(chat_router)
 app.include_router(rag_router)
 app.include_router(health_router)
-app.include_router(tool_router)
-app.include_router(workflow_router)
 
 
 def main():

@@ -4,7 +4,7 @@
 # ============================================================
 spring:
   application:
-    name: ai-agent-java-service
+    name: InternSU
   profiles:
     active: dev
   main:
