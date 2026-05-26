@@ -1,0 +1,22 @@
+{
+  "ai-workspace": {
+    "title": "AI 工作台",
+    "chat": "AI 聊天",
+    "knowledge": "知识库管理",
+    "prompt": "Prompt 管理",
+    "model": "模型管理",
+    "agent": "Agent Router",
+    "history": "会话历史"
+  },
+  "dashboard": {
+    "title": "工作台",
+    "workspace": "首页"
+  },
+  "common": {
+    "loadingMenu": "加载菜单中",
+    "upload": "上传",
+    "delete": "删除",
+    "save": "保存",
+    "cancel": "取消"
+  }
+}

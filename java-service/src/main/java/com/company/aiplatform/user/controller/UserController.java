@@ -5,6 +5,7 @@ import com.company.aiplatform.auth.dto.AssignRoleReq;
 import com.company.aiplatform.auth.vo.LoginVO;
 import com.company.aiplatform.user.service.IUserService;
 import com.company.aiplatform.user.vo.UserVO;
+import com.company.aiplatform.annotation.CurrentUserId;
 import com.company.aiplatform.common.result.Result;
 import com.company.aiplatform.auth.security.JwtTokenProvider;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,7 +22,7 @@ import java.security.Principal;
  */
 @Tag(name = "用户管理", description = "用户CRUD、角色分配")
 @RestController
-@RequestMapping("/v1/admin/users")
+@RequestMapping("/api/v1/admin/users")
 @RequiredArgsConstructor
 public class UserController {
 
@@ -69,9 +70,6 @@ public class UserController {
     @GetMapping("/me")
     @PreAuthorize("hasAnyRole('ADMIN', 'USER')")
     public Result<LoginVO.UserInfo> currentUser(Principal principal) {
-        // 从 JWT 返回当前用户基本信息
-        return Result.success(LoginVO.UserInfo.builder()
-                .username(principal.getName())
-                .build());
+        return Result.success(iUserService.getCurrentUser(principal));
     }
 }

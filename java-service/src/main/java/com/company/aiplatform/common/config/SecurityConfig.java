@@ -44,7 +44,7 @@ public class SecurityConfig {
                                 "/webjars/**"
                         ).permitAll()
                         // 认证相关接口（logout 需要 Token，其他不需要）
-                        .requestMatchers("/v1/auth/login", "/v1/auth/register", "/v1/auth/refresh").permitAll()
+                        .requestMatchers("/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/refresh").permitAll()
                         .requestMatchers("/auth/register").permitAll()
                         // 其余全部需要认证
                         .anyRequest().authenticated()

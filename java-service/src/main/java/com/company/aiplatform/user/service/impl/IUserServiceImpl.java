@@ -8,6 +8,7 @@ import com.company.aiplatform.auth.entity.User;
 import com.company.aiplatform.auth.entity.UserRole;
 import com.company.aiplatform.auth.mapper.UserMapper;
 import com.company.aiplatform.auth.mapper.UserRoleMapper;
+import com.company.aiplatform.auth.vo.LoginVO;
 import com.company.aiplatform.common.enums.ResultCode;
 import com.company.aiplatform.common.exception.BusinessException;
 import com.company.aiplatform.user.service.IUserService;
@@ -17,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.Principal;
 import java.util.List;
 
 
@@ -112,5 +114,22 @@ public class IUserServiceImpl implements IUserService {
         user.setStatus(status);
         userMapper.updateById(user);
         log.info("User status changed: userId={}, status={}", userId, status);
+    }
+
+    @Override
+    public LoginVO.UserInfo getCurrentUser(Principal principal) {
+        String username = principal.getName();
+        User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
+                .eq(User::getUsername, username));
+        if (user == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "用户不存在");
+        }
+        return LoginVO.UserInfo.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .nickname(user.getNickname())
+                .email(user.getEmail())
+                .avatarUrl(user.getAvatarUrl())
+                .build();
     }
 }

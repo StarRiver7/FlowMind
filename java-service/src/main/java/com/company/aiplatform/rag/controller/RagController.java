@@ -2,7 +2,6 @@ package com.company.aiplatform.rag.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.company.aiplatform.annotation.CurrentUserId;
-import com.company.aiplatform.annotation.RequireRole;
 import com.company.aiplatform.common.enums.ResultCode;
 import com.company.aiplatform.common.result.Result;
 import com.company.aiplatform.rag.entity.Document;
@@ -18,7 +17,7 @@ import java.util.Map;
 
 @Tag(name = "文档管理", description = "文档管理相关接口")
 @RestController
-@RequestMapping("/v1/documents")
+@RequestMapping("/api/v1/documents")
 @RequiredArgsConstructor
 public class RagController {
 

@@ -1,0 +1,110 @@
+﻿import type { Recordable, UserInfo } from '@vben/types';
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { LOGIN_PATH } from '@vben/constants';
+import { preferences } from '@vben/preferences';
+import { resetAllStores, useAccessStore, useUserStore } from '@vben/stores';
+import { ElNotification } from 'element-plus';
+import { defineStore } from 'pinia';
+import {
+  getAccessCodesApi,
+  loginApi,
+  logoutApi,
+  type LoginResult,
+  type JavaUserInfo,
+} from '#/api';
+import { $t } from '#/locales';
+
+function mapJavaUserToVben(javaUser: JavaUserInfo, token: string): UserInfo {
+  return {
+    avatar: javaUser.avatarUrl ?? '',
+    desc: javaUser.email ?? '',
+    homePath: '/ai-workspace/chat',
+    realName: javaUser.nickname ?? javaUser.username,
+    roles: ['admin'],
+    token,
+    userId: String(javaUser.id),
+    username: javaUser.username,
+  };
+}
+
+export const useAuthStore = defineStore('auth', () => {
+  const accessStore = useAccessStore();
+  const userStore = useUserStore();
+  const router = useRouter();
+  const loginLoading = ref(false);
+
+  async function authLogin(
+    params: Recordable<any>,
+    onSuccess?: () => Promise<void> | void,
+  ) {
+    let userInfo: null | UserInfo = null;
+    try {
+      loginLoading.value = true;
+      const loginResult: LoginResult = await loginApi(params);
+
+      if (loginResult.accessToken) {
+        accessStore.setAccessToken(loginResult.accessToken);
+        if (loginResult.refreshToken) {
+          accessStore.setRefreshToken(loginResult.refreshToken);
+        }
+
+        userInfo = mapJavaUserToVben(loginResult.userInfo, loginResult.accessToken);
+        userStore.setUserInfo(userInfo);
+        localStorage.setItem('flowmind_user', JSON.stringify(userInfo));
+        localStorage.setItem('flowmind_token', loginResult.accessToken);
+
+        const accessCodes = await getAccessCodesApi();
+        accessStore.setAccessCodes(accessCodes);
+
+        if (accessStore.loginExpired) {
+          accessStore.setLoginExpired(false);
+        } else {
+          onSuccess
+            ? await onSuccess?.()
+            : await router.push(userInfo.homePath || preferences.app.defaultHomePath);
+        }
+
+        if (userInfo?.realName) {
+          ElNotification({
+            message: `${$t('authentication.loginSuccessDesc')}:${userInfo?.realName}`,
+            title: $t('authentication.loginSuccess'),
+            type: 'success',
+          });
+        }
+      }
+    } finally {
+      loginLoading.value = false;
+    }
+    return { userInfo };
+  }
+
+  async function logout(redirect: boolean = true) {
+    try { await logoutApi(); } catch { /* ignore */ }
+    resetAllStores();
+    localStorage.removeItem('flowmind_user');
+    localStorage.removeItem('flowmind_token');
+    accessStore.setLoginExpired(false);
+    await router.replace({
+      path: LOGIN_PATH,
+      query: redirect ? { redirect: encodeURIComponent(router.currentRoute.value.fullPath) } : {},
+    });
+  }
+
+  async function fetchUserInfo(): Promise<UserInfo | null> {
+    if (userStore.userInfo?.userId) return userStore.userInfo as UserInfo;
+    try {
+      const cached = localStorage.getItem('flowmind_user');
+      if (cached) {
+        const userInfo = JSON.parse(cached) as UserInfo;
+        userStore.setUserInfo(userInfo);
+        return userInfo;
+      }
+    } catch { /* ignore */ }
+    return null;
+  }
+
+  function $reset() { loginLoading.value = false; }
+
+  return { $reset, authLogin, fetchUserInfo, loginLoading, logout };
+});
