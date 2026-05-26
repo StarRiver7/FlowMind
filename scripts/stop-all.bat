@@ -16,7 +16,7 @@ echo.
 :: === Service Port Map ===
 set "JAVA_PORT=8080"
 set "AI_PORT=8000"
-set "FRONTEND_PORT=5173"
+set "FRONTEND_PORT=5777"
 set "GRPC_PORT=9090"
 
 set "KILLED=0"
@@ -57,3 +57,4 @@ taskkill /FI "WINDOWTITLE eq FlowMind*" /F >nul 2>&1
 echo   Done! Press any key to close...
 pause >nul
 exit /b 0
+

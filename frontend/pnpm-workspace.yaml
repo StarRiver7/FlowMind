@@ -1,4 +1,4 @@
-packages:
+﻿packages:
   - internal/*
   - internal/lint-configs/*
   - packages/*
@@ -10,8 +10,6 @@ packages:
   - packages/business/*
   - apps/*
   - scripts/*
-  - docs
-  - playground
 
 publicHoistPattern:
   - lefthook

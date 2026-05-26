@@ -6,7 +6,7 @@ Multi-service AI agent orchestration platform with RAG pipeline, LLM integration
 
 ```
 FlowMind/
-├── frontend/           Vue Vben Admin (Element Plus) - port 5173
+├── frontend/           Vue Vben Admin (Element Plus) - port 5777
 ├── java-service/       Spring Boot 3 + MyBatis Plus - port 8080
 ├── python-ai-service/  FastAPI + LangChain + LangGraph - port 8000
 ├── sql/                Flyway migrations (MySQL)
@@ -47,7 +47,7 @@ scripts\stop-all.bat
 
 | Window Title               | Command                          |
 |----------------------------|----------------------------------|
-| `FlowMind - Frontend :5173` | `pnpm run dev:ele` (Element Plus) |
+| `FlowMind - Frontend :5777` | `pnpm run dev:ele` (Element Plus) |
 | `FlowMind - Python AI :8000` | `uvicorn app.main:app --reload`  |
 | `FlowMind - Java :8080`     | `mvnw spring-boot:run`           |
 
@@ -63,7 +63,7 @@ Ensure MySQL and Redis are running as Windows services.
 cd frontend
 $env:Path = "F:\node22\node-v22.14.0-win-x64;" + $env:Path
 pnpm install        # first run only
-pnpm run dev:ele    # Vite HMR on port 5173
+pnpm run dev:ele    # Vite HMR on port 5777
 ```
 
 ### 3. Python AI Service
@@ -86,7 +86,7 @@ cd java-service
 
 | Service      | URL                                   |
 |-------------|---------------------------------------|
-| Frontend     | http://localhost:5173                 |
+| Frontend     | http://localhost:5777                 |
 | AI API Docs  | http://localhost:8000/docs            |
 | AI Health    | http://localhost:8000/health          |
 | Java API     | http://localhost:8080                 |
@@ -149,3 +149,4 @@ set "CONDA_ENV=flowmind"
 **pnpm not found** — Install globally: `npm install -g pnpm` or ensure `%NODE_HOME%\pnpm.cmd` exists.
 
 **MySQL connection refused** — Start MySQL service: `net start MySQL80` (or your service name).
+

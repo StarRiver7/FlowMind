@@ -21,7 +21,7 @@ set "MYSQL_PORT=3306"
 set "REDIS_PORT=6379"
 set "JAVA_PORT=8080"
 set "AI_PORT=8000"
-set "FRONTEND_PORT=5173"
+set "FRONTEND_PORT=5777"
 
 :: === Locate Conda activate script ===
 set "CONDA_ACTIVATE="
@@ -206,7 +206,7 @@ start "FlowMind-Frontend" cmd /k ^
   cd /d "%ROOT%\frontend" && ^
   echo [%date% %time%] Frontend ^(Element Plus^) starting... && ^
   echo. && ^
-  pnpm run dev:ele"
+  pnpm dev"
 
 :: --- B. Python AI Service (uvicorn --reload, conda env) ---
 echo   Launching Python AI [:%AI_PORT%]
@@ -289,3 +289,5 @@ if !elapsed! geq %timeout% (
     exit /b 0
 )
 goto wait_loop
+
+

@@ -115,7 +115,7 @@ if %errorlevel% neq 0 (
 :: --- Ports ---
 echo.
 echo   [Port Availability]
-for %%P in (8080 8000 5173) do (
+for %%P in (8080 8000 5777) do (
     netstat -ano | findstr ":%%P " | findstr "LISTENING" >nul 2>&1
     if !errorlevel! equ 0 (
         echo     Port %%P: IN USE
@@ -137,3 +137,4 @@ echo.
 
 pause
 exit /b 0
+
