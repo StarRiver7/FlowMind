@@ -21,8 +21,8 @@ defineOptions({
 
 withDefaults(defineProps<Props>(), {
   description:
-    '是一个现代化开箱即用的中后台解决方案，采用最新的技术栈，包括 Vue 3.0、Vite、TailwindCSS 和 TypeScript 等前沿技术，代码规范严谨，提供丰富的配置选项，旨在为中大型项目的开发提供现成的开箱即用解决方案及丰富的示例，同时，它也是学习和深入前端技术的一个极佳示例。',
-  name: 'Vben Admin',
+    'FlowMind 是一个为企业打造的 AI Agent 全生命周期管理平台。它帮助企业在安全、可控的前提下，快速构建、部署和治理具备自主规划、工具调用、知识增强与协作能力的智能体。平台内置 RAG 知识库、多模型网关、可视化工作流编排和细粒度权限体系，让 AI 从“对话助手”升级为“业务执行者”。',
+  name: 'FlowMind',
   title: '关于项目',
 });
 

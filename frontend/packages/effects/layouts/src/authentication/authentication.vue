@@ -24,15 +24,12 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  appName: '',
   copyright: true,
   logo: '',
   logoDark: '',
-  pageDescription: '',
-  pageTitle: '',
   sloganImage: '',
   toolbar: true,
-  toolbarList: () => ['color', 'language', 'layout', 'theme'],
+  toolbarList: () => ['language', 'theme'],
   clickLogo: () => {},
 });
 
@@ -88,16 +85,8 @@ const logoSrc = computed(() => {
         <div
           class="mt-4 ml-4 flex flex-1 items-center text-foreground sm:top-6 sm:left-6 lg:text-foreground"
         >
-          <img
-            v-if="logoSrc"
-            :key="logoSrc"
-            :alt="appName"
-            :src="logoSrc"
-            class="mr-2"
-            width="42"
-          />
-          <p v-if="appName" class="m-0 text-xl font-medium">
-            {{ appName }}
+          <p v-if="pageTitle" class="m-0 text-xl font-medium">
+            FlowMind
           </p>
         </div>
       </div>
@@ -124,12 +113,12 @@ const logoSrc = computed(() => {
               class="h-64 w-2/5 animate-float"
             />
           </template>
-          <SloganIcon v-else :alt="appName" class="h-64 w-2/5 animate-float" />
+          
           <div class="text-1xl mt-6 font-sans text-foreground lg:text-2xl">
-            {{ pageTitle }}
+            企业的聪明大管家
           </div>
           <div class="mt-2 dark:text-muted-foreground">
-            {{ pageDescription }}
+            管家界的小鲜肉，AI里的老司机
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-﻿{
+{
     "name":  "vben-admin-monorepo",
     "version":  "5.7.0",
     "private":  true,
@@ -43,9 +43,7 @@
                             "@vben/stylelint-config":  "workspace:*",
                             "@vben/tailwind-config":  "workspace:*",
                             "@vben/tsconfig":  "workspace:*",
-                            "@vben/turbo-run":  "workspace:*",
                             "@vben/vite-config":  "workspace:*",
-                            "@vben/vsh":  "workspace:*",
                             "@vitejs/plugin-vue":  "catalog:",
                             "@vitejs/plugin-vue-jsx":  "catalog:",
                             "cross-env":  "catalog:",

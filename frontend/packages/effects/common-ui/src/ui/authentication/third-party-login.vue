@@ -46,20 +46,6 @@ const {
       >
         <SvgQQChatIcon />
       </VbenIconButton>
-      <VbenIconButton
-        :tooltip="$t('authentication.githubLogin')"
-        tooltip-side="top"
-        class="mb-3"
-      >
-        <SvgGithubIcon />
-      </VbenIconButton>
-      <VbenIconButton
-        :tooltip="$t('authentication.googleLogin')"
-        tooltip-side="top"
-        class="mb-3"
-      >
-        <SvgGoogleIcon />
-      </VbenIconButton>
       <DingdingLogin
         v-if="dingdingAuthConfig"
         :corp-id="dingdingAuthConfig.corpId"

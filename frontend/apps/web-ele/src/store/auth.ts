@@ -1,4 +1,4 @@
-﻿import type { Recordable, UserInfo } from '@vben/types';
+import type { Recordable, UserInfo } from '@vben/types';
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { LOGIN_PATH } from '@vben/constants';
@@ -10,6 +10,7 @@ import {
   getAccessCodesApi,
   loginApi,
   logoutApi,
+  registerApi,
   type LoginResult,
   type JavaUserInfo,
 } from '#/api';
@@ -79,6 +80,30 @@ export const useAuthStore = defineStore('auth', () => {
     return { userInfo };
   }
 
+  /** 用户注册 */
+  async function authRegister(params: { password: string; username: string }) {
+    loginLoading.value = true;
+    try {
+      await registerApi({ username: params.username, password: params.password });
+      ElNotification({
+        message: $t('authentication.registerSuccess'),
+        title: $t('authentication.registerSuccess'),
+        type: 'success',
+      });
+      await router.push(LOGIN_PATH);
+    } catch (error: any) {
+      const msg = error?.response?.data?.message ?? error?.message ?? '注册失败';
+      ElNotification({
+        message: msg,
+        title: $t('common.error'),
+        type: 'error',
+      });
+      throw error;
+    } finally {
+      loginLoading.value = false;
+    }
+  }
+
   async function logout(redirect: boolean = true) {
     try { await logoutApi(); } catch { /* ignore */ }
     resetAllStores();
@@ -106,5 +131,5 @@ export const useAuthStore = defineStore('auth', () => {
 
   function $reset() { loginLoading.value = false; }
 
-  return { $reset, authLogin, fetchUserInfo, loginLoading, logout };
+  return { $reset, authLogin, authRegister, fetchUserInfo, loginLoading, logout };
 });
