@@ -3,7 +3,6 @@ package com.company.aiplatform.common.filter;
 import com.company.aiplatform.auth.service.ITokenBlacklistService;
 import com.company.aiplatform.auth.security.JwtTokenProvider;
 import com.company.aiplatform.auth.security.UserDetailsServiceImpl;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

@@ -51,9 +51,20 @@ async def chat(req: ChatRequest, request: Request):
         )
 
     # 非流式
-    result = await _run_graph(req)
+    history = await memory_manager.get_history(req.user_id, req.conversation_id)
+    restore_state = await memory_manager.restore_graph_state(req.user_id, req.conversation_id)
+    result = await _run_graph(req, history, restore_state)
+    await memory_manager.save_graph_state(req.user_id, req.conversation_id, result)
+    final_text = result.get("final_answer", "")
+    if not final_text:
+        final_text = "收到老师～小SU遇到了问题，请查看服务器日志排查LLM连接"
+    await memory_manager.record_turn(
+        user_id=req.user_id, conv_id=req.conversation_id,
+        user_msg=req.message, assistant_msg=final_text,
+        sources=result.get("sources"), intent=result.get("intent", "chat"),
+    )
     return ApiResponse(data={
-        "content": result.get("final_answer", ""),
+        "content": final_text,
         "conversation_id": req.conversation_id,
         "intent": result.get("intent", "chat"),
         "sources": result.get("sources", []),
@@ -96,8 +107,14 @@ async def _sse_generator(req: ChatRequest):
         yield await sender.trace("loading", "completed", step_order=0,
                                  detail={"history_rounds": len(history) // 2})
 
+        # Step 1.5: restore agent state from Redis
+        restore_state = await memory_manager.restore_graph_state(req.user_id, req.conversation_id)
+
         # Step 2: 执行 Graph (非流式获取完整结果)
-        result = await _run_graph(req, history)
+        result = await _run_graph(req, history, restore_state)
+
+        # Step 2.5: save agent state to Redis
+        await memory_manager.save_graph_state(req.user_id, req.conversation_id, result)
 
         # Step 3: 推送 trace (工作过程)
         traces = result.get("trace_steps", [])
@@ -119,9 +136,10 @@ async def _sse_generator(req: ChatRequest):
 
         # Step 5: 逐字推送
         final_text = result.get("final_answer", "")
+        if not final_text:
+            final_text = "收到老师～小SU遇到了问题，请查看服务器日志排查LLM连接"
         for char in final_text:
             yield await sender.token(char)
-
         # Step 6: 完成
         yield await sender.done(
             intent=result.get("intent", "chat"),
@@ -132,7 +150,7 @@ async def _sse_generator(req: ChatRequest):
         # Step 7: 持久化
         await memory_manager.record_turn(
             user_id=req.user_id,
-            conversation_id=req.conversation_id,
+            conv_id=req.conversation_id,
             user_msg=req.message,
             assistant_msg=final_text,
             sources=result.get("sources"),
@@ -153,15 +171,17 @@ async def _sse_generator(req: ChatRequest):
         )
 
 
-async def _run_graph(req: ChatRequest, history: list[dict] | None = None) -> dict:
+async def _run_graph(req, history=None, restore_state=None):
     """执行 LangGraph 并返回结果。"""
-    return await intern_graph.run(
+    result = await intern_graph.run(
         user_id=req.user_id,
         conversation_id=req.conversation_id,
         message=req.message,
         history=history,
         model_name=req.model or "deepseek-chat",
+        restore_state=restore_state,
     )
+    return result
 
 
 # ============================================================

@@ -80,7 +80,7 @@ async def intent_node(state: InternState) -> InternState:
     state["clarify_required"] = clarify_required
 
     if clarify_required:
-        state["intent"] = "clarify"
+        # Keep original intent for slot schema lookup
         state["clarify_round"] = state.get("clarify_round", 0) + 1
 
     # ---- 记录完成 ----

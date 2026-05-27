@@ -18,9 +18,23 @@ async def clarify_node(state: InternState) -> InternState:
     missing = slot_manager.check_missing(slots, collected)
     state["clarify_slots"] = slots
     state["missing_slots"] = missing
-    if not missing:
-        state["clarify_finished"] = True
-        state["clarify_required"] = False
+    if not slots or not missing:
+        if not slots:
+            generic_prompt = f"Teacher asked: {message}. Generate a polite clarification question. Start with receive teacher~. Ask what they want to know specifically."
+            try:
+                resp = await llm_gateway.chat([{"role": "system", "content": CLARIFY_SYSTEM}, {"role": "user", "content": generic_prompt}], temperature=0.5, max_tokens=512)
+                state["clarify_question"] = resp.content.strip()
+            except Exception as e:
+                logger.error(f"Generic clarify failed: {e}")
+                state["clarify_question"] = "receive teacher~ can you be more specific?"
+            state["clarify_pending"] = True
+            state["final_answer"] = state["clarify_question"]
+            state["done"] = True
+        else:
+            state["clarify_finished"] = True
+            state["clarify_required"] = False
+        dur = int((time.time() - t0) * 1000)
+        state["trace_steps"][-1] = {"node": "clarify_node", "message": "info sufficient, no clarify needed", "status": "completed", "duration_ms": dur, "timestamp": _now()}
         return state
     prompt = build_clarify_prompt(message, missing, slots)
     msgs = [{"role": "system", "content": CLARIFY_SYSTEM}, {"role": "user", "content": prompt}]

@@ -15,5 +15,8 @@ def route_after_slot_collect(state: InternState) -> Literal["clarify_node", "tas
         return "task_resume_node"
     return "clarify_node"
 
-def route_after_router(state: InternState) -> Literal["chat_node"]:
+def route_after_router(state: InternState) -> Literal["chat_node", "sql_node"]:
+    intent = state.get("intent", "chat")
+    if intent == "sql":
+        return "sql_node"
     return "chat_node"
