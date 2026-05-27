@@ -1,95 +1,59 @@
 
-"""InternSU LangGraph State 定义。
+"""InternSU LangGraph 统一 State 定义。
 
-基于产品定义，扩展 RouterState 以支持:
-  - Clarify 反问机制
-  - SQL 生成与执行
-  - 工作过程追踪 (traces)
-  - Source 引用 (sources)
-  - 权限上下文 (permission_context)
+贯穿整个 Graph 工作流的共享状态，所有节点读写此对象。
+
+用户指定字段:
+  conversation_id, user_id, user_message, intent,
+  clarify_required, clarify_question, conversation_context,
+  trace_steps, final_answer, current_node
 """
 
 from typing import TypedDict, Annotated, Optional, Any
 from operator import add
 
 
-class TraceStep(TypedDict, total=False):
-    """工作过程中单个步骤的记录。"""
-    step: str               # 步骤名: intent_recognition, knowledge_retrieval 等
-    status: str             # running, completed, failed
-    step_order: int         # 步骤序号
-    detail: dict | None     # 步骤详情
-    started_at: str | None  # ISO 时间
-    completed_at: str | None
-    duration_ms: int | None
-
-
-class SourceRef(TypedDict, total=False):
-    """RAG 引用来源。"""
-    document_id: int
-    document_name: str
-    chunk_index: int
-    page_number: int | None
-    excerpt: str
-    score: float
-
-
-class ClarifyQuestion(TypedDict):
-    """反问澄清中的单个问题。"""
-    question: str           # 问题文本
-    default: str | None     # 默认值
-    options: list[str] | None  # 可选项
-
-
 class InternState(TypedDict):
     """InternSU LangGraph 全局状态。
 
-    贯穿整个 Agent 工作流的共享状态对象。
+    数据流: START -> intent_node -> clarify_node -> router_node -> chat_node -> response_node -> END
     """
 
-    # ---- 基础上下文 ----
-    user_id: str
-    conversation_id: str
-    message: str                         # 当前用户消息
-    history: Annotated[list[dict], add]  # 对话历史 (累积)
+    # ---- 基础标识 ----
+    conversation_id: str                     # 会话 ID
+    user_id: str                             # 用户 ID
 
-    # ---- 权限上下文 ----
-    permission_context: dict             # {user_id, department_id, department_path, allowed_space_ids}
+    # ---- 输入 ----
+    user_message: str                        # 用户原始消息
+    conversation_context: Annotated[list[dict], add]  # 对话历史 (累积)
 
-    # ---- 意图与路由 ----
-    intent: str                          # chat, rag, sql, clarify
-    intent_confidence: float             # 意图置信度
+    # ---- 意图识别 ----
+    intent: str                              # chat / clarify / rag / sql / summarize / unclear
+    intent_confidence: float                 # 意图置信度 0.0~1.0
 
     # ---- Clarify 反问 ----
-    clarify_questions: Annotated[list[dict], add]  # 反问问题列表
-    clarify_round: int                   # 当前反问轮次
-    pending_clarify: bool                # 是否有待确认的反问
+    clarify_required: bool                   # 是否需要反问澄清
+    clarify_question: str                    # AI 反问的问题文本
+    clarify_round: int                       # 当前反问轮次 (从1开始)
+    clarify_pending: bool                    # 是否有待用户回答的反问
+    collected_slots: dict                    # 已收集的参数槽位 {time_range: 本月, department: 技术部}
 
-    # ---- RAG 检索 ----
-    retrieved_docs: Annotated[list[dict], add]  # 检索到的文档 chunk
-    filtered_docs: list[dict]            # 权限过滤后的文档
-    rag_context: str                     # 注入 LLM 的 RAG 上下文文本
-
-    # ---- SQL Agent ----
-    generated_sql: str                   # LLM 生成的 SQL
-    sql_security_passed: bool            # 安全检查是否通过
-    sql_security_detail: dict            # 安全检查详情
-    executed_sql: str                    # 实际执行的 SQL
-    sql_result: Any                      # SQL 执行结果
-    sql_error: str | None                # SQL 执行错误
+    # ---- 路由 ----
+    current_node: str                        # 当前所在节点名
+    next_node: str                           # 下一个节点名
 
     # ---- 工作过程追踪 ----
-    traces: Annotated[list[dict], add]   # 工作步骤记录
+    trace_steps: Annotated[list[dict], add]  # 工作步骤记录
 
     # ---- 回答生成 ----
-    sources: list[dict]                  # Source 引用列表
-    tokens_used: int                     # Token 消耗
-    model_name: str                      # 使用的模型名
+    system_prompt: str                       # 注入的 System Prompt
+    final_answer: str                        # 最终回答文本
+    tokens_used: int                         # Token 消耗
+    model_name: str                          # 使用的模型名
 
-    # ---- 最终输出 ----
-    final_response: str                  # 最终回答文本
-    error: Optional[str]                 # 错误信息
-    done: bool                           # 是否完成
+    # ---- 元数据 ----
+    error: Optional[str]                     # 错误信息
+    done: bool                               # 是否完成
 
 
 def create_initial_state(
@@ -97,35 +61,37 @@ def create_initial_state(
     conversation_id: str,
     message: str,
     history: list[dict] | None = None,
-    permission_context: dict | None = None,
     model_name: str = "deepseek-chat",
 ) -> InternState:
-    """创建 LangGraph 初始状态。"""
+    """创建 Graph 初始状态。
+
+    Args:
+        user_id: 用户 ID
+        conversation_id: 会话 ID
+        message: 用户输入的消息文本
+        history: 历史对话上下文
+        model_name: LLM 模型名
+    """
     return InternState(
-        user_id=user_id,
         conversation_id=conversation_id,
-        message=message,
-        history=history or [],
-        permission_context=permission_context or {},
+        user_id=user_id,
+        user_message=message,
+        conversation_context=history or [],
         intent="chat",
         intent_confidence=0.0,
-        clarify_questions=[],
+        clarify_required=False,
+        clarify_question="",
         clarify_round=0,
-        pending_clarify=False,
-        retrieved_docs=[],
-        filtered_docs=[],
-        rag_context="",
-        generated_sql="",
-        sql_security_passed=False,
-        sql_security_detail={},
-        executed_sql="",
-        sql_result=None,
-        sql_error=None,
-        traces=[],
+        clarify_pending=False,
+        collected_slots={},
+        current_node="",
+        next_node="",
         sources=[],
+        trace_steps=[],
+        system_prompt="",
+        final_answer="",
         tokens_used=0,
         model_name=model_name,
-        final_response="",
         error=None,
         done=False,
     )

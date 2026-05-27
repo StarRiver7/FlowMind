@@ -53,11 +53,11 @@ async def chat(req: ChatRequest, request: Request):
     # 非流式
     result = await _run_graph(req)
     return ApiResponse(data={
-        "content": result.get("final_response", ""),
+        "content": result.get("final_answer", ""),
         "conversation_id": req.conversation_id,
         "intent": result.get("intent", "chat"),
         "sources": result.get("sources", []),
-        "traces": result.get("traces", []),
+        "traces": result.get("trace_steps", []),
     }).model_dump()
 
 
@@ -100,12 +100,12 @@ async def _sse_generator(req: ChatRequest):
         result = await _run_graph(req, history)
 
         # Step 3: 推送 trace (工作过程)
-        traces = result.get("traces", [])
-        for t in traces:
+        traces = result.get("trace_steps", [])
+        for i, t in enumerate(traces):
             yield await sender.trace(
-                step=t.get("step", ""),
+                step=t.get("node", ""),
                 status=t.get("status", "completed"),
-                step_order=t.get("step_order", 0),
+                step_order=i,
                 detail=t.get("detail"),
                 duration_ms=t.get("duration_ms"),
             )
@@ -118,7 +118,7 @@ async def _sse_generator(req: ChatRequest):
         )
 
         # Step 5: 逐字推送
-        final_text = result.get("final_response", "")
+        final_text = result.get("final_answer", "")
         for char in final_text:
             yield await sender.token(char)
 
@@ -160,7 +160,6 @@ async def _run_graph(req: ChatRequest, history: list[dict] | None = None) -> dic
         conversation_id=req.conversation_id,
         message=req.message,
         history=history,
-        permission_context=req.permission_context if hasattr(req, "permission_context") else None,
         model_name=req.model or "deepseek-chat",
     )
 
