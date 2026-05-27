@@ -128,7 +128,8 @@ class TestDocumentStatus:
             ("uploaded", "parsing"),
             ("parsing", "parsed"),
             ("parsed", "chunking"),
-            ("chunking", "embedding"),
+            ("chunking", "chunked"),
+            ("chunked", "embedding"),
             ("embedding", "indexed"),
             ("indexed", "ready"),
         ]
@@ -388,3 +389,4 @@ class TestAllowedExtensions:
         denied = [".py", ".js", ".exe", ".dll", ".sh", ".bat", ".html", ".json"]
         for ext in denied:
             assert ext not in ALLOWED_EXTENSIONS, f"{ext} should not be allowed"
+

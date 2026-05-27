@@ -33,6 +33,11 @@ from app.schemas.kb_schemas import (
     DocumentStatusResponse,
 )
 from app.common.response.common import ApiResponse, ErrorResponse
+from app.rag.pipeline.document_pipeline import document_pipeline
+from app.rag.pipeline.async_pipeline import async_pipeline
+from app.rag.chunk.chunk_storage import chunk_storage
+from app.rag.chunk.chunk_service import chunk_service
+
 from app.core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -318,3 +323,97 @@ async def delete_document(
         return ErrorResponse(code=500, message="删除文档失败").model_dump()
 
     return ApiResponse(message="文档已删除").model_dump()
+
+# ============================================================
+# Document Processing endpoints
+# ============================================================
+
+@router.post("/document/{doc_id}/parse", response_model=ApiResponse)
+async def parse_document(
+    doc_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """触发文档解析流水线 (同步).
+
+    执行: Parse → Clean → Chunk → Store
+    返回详细的阶段报告。
+    """
+    try:
+        result = document_pipeline.run(db, doc_id)
+        if result["success"]:
+            return ApiResponse(
+                message="文档解析完成",
+                data=result,
+            ).model_dump()
+        else:
+            return ErrorResponse(
+                code=400,
+                message=result.get("error", "文档解析失败"),
+                detail=str(result.get("summary", {})),
+            ).model_dump()
+    except Exception as e:
+        logger.error(f"[KB-API] 解析文档失败 doc_id={doc_id}: {e}", exc_info=True)
+        return ErrorResponse(
+            code=500,
+            message="收到老师～文档解析时遇到一点问题，请稍后重试～",
+        ).model_dump()
+
+
+@router.post("/document/{doc_id}/parse/stream")
+async def parse_document_stream(
+    doc_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """触发文档解析流水线 (SSE 流式进度推送)."""
+    return StreamingResponse(
+        async_pipeline.process_with_sse(db, doc_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Content-Type": "text/event-stream; charset=utf-8",
+        },
+    )
+
+
+@router.get("/document/{doc_id}/chunks", response_model=ApiResponse)
+async def get_document_chunks(
+    doc_id: int,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
+    """获取文档的所有 Chunk."""
+    chunks = chunk_storage.get_chunks_by_document(db, doc_id, offset, limit)
+    total = chunk_storage.get_chunk_count(db, doc_id)
+    return ApiResponse(
+        data={
+            "chunks": [
+                {
+                    "id": c.id,
+                    "chunk_index": c.chunk_index,
+                    "content": c.content,
+                    "char_count": c.char_count,
+                    "page_number": c.page_number,
+                    "is_embedded": c.is_embedded,
+                    "create_time": c.create_time.isoformat() if c.create_time else None,
+                }
+                for c in chunks
+            ],
+            "total": total,
+        },
+    ).model_dump()
+
+
+@router.get("/document/{doc_id}/quality", response_model=ApiResponse)
+async def check_document_quality(
+    doc_id: int,
+    db: Session = Depends(get_db),
+):
+    """检查文档 Chunk 质量."""
+    result = chunk_service.quality_check(db, doc_id)
+    return ApiResponse(data=result).model_dump()
+

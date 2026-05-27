@@ -1,7 +1,7 @@
 """Document processing status constants and lifecycle state machine.
 
 Status flow:
-    UPLOADED → PARSING → PARSED → CHUNKING → EMBEDDING → INDEXED → READY
+    UPLOADED → PARSING → PARSED → CHUNKING → CHUNKED → EMBEDDING → INDEXED → READY
     Any stage → FAILED (terminal)
 """
 
@@ -13,13 +13,14 @@ class DocumentStatus(StrEnum):
     """文档处理状态枚举."""
 
     UPLOADED = "uploaded"       # 已上传，等待处理
-    PARSING = "parsing"          # 正在解析文档内容
-    PARSED = "parsed"            # 解析完成
-    CHUNKING = "chunking"        # 正在分块
-    EMBEDDING = "embedding"      # 正在向量化
-    INDEXED = "indexed"          # 已写入向量库
-    READY = "ready"              # 就绪，可检索
-    FAILED = "failed"            # 处理失败（终态）
+    PARSING = "parsing"         # 正在解析文档内容
+    PARSED = "parsed"           # 解析完成
+    CHUNKING = "chunking"       # 正在分块
+    CHUNKED = "chunked"         # 分块完成，等待向量化
+    EMBEDDING = "embedding"     # 正在向量化
+    INDEXED = "indexed"         # 已写入向量库
+    READY = "ready"             # 就绪，可检索
+    FAILED = "failed"           # 处理失败（终态）
 
 
 # 合法的状态流转路径
@@ -27,7 +28,8 @@ _TRANSITIONS: dict[DocumentStatus, list[DocumentStatus]] = {
     DocumentStatus.UPLOADED:  [DocumentStatus.PARSING, DocumentStatus.FAILED],
     DocumentStatus.PARSING:   [DocumentStatus.PARSED, DocumentStatus.FAILED],
     DocumentStatus.PARSED:    [DocumentStatus.CHUNKING, DocumentStatus.FAILED],
-    DocumentStatus.CHUNKING:  [DocumentStatus.EMBEDDING, DocumentStatus.FAILED],
+    DocumentStatus.CHUNKING:  [DocumentStatus.CHUNKED, DocumentStatus.FAILED],
+    DocumentStatus.CHUNKED:   [DocumentStatus.EMBEDDING, DocumentStatus.FAILED],
     DocumentStatus.EMBEDDING: [DocumentStatus.INDEXED, DocumentStatus.FAILED],
     DocumentStatus.INDEXED:   [DocumentStatus.READY, DocumentStatus.FAILED],
     DocumentStatus.READY:     [DocumentStatus.FAILED],
@@ -36,7 +38,13 @@ _TRANSITIONS: dict[DocumentStatus, list[DocumentStatus]] = {
 
 
 # 允许重新处理的起始状态
-_RETRYABLE_STATUSES = frozenset({DocumentStatus.FAILED, DocumentStatus.PARSED, DocumentStatus.INDEXED, DocumentStatus.READY})
+_RETRYABLE_STATUSES = frozenset({
+    DocumentStatus.FAILED,
+    DocumentStatus.PARSED,
+    DocumentStatus.CHUNKED,
+    DocumentStatus.INDEXED,
+    DocumentStatus.READY,
+})
 
 
 def can_transition(current: str, target: str) -> bool:
@@ -79,6 +87,7 @@ def status_display_name(status: str) -> str:
         "parsing": "解析中",
         "parsed": "已解析",
         "chunking": "分块中",
+        "chunked": "已分块",
         "embedding": "向量化中",
         "indexed": "已索引",
         "ready": "就绪",
