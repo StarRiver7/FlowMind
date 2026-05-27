@@ -1,5 +1,5 @@
 # ============================================================
-# FlowMind — Python AI Service Core Config
+# InternSU — Python AI Service Core Config
 # ============================================================
 from typing import Optional, Literal
 from pydantic_settings import BaseSettings
@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
     # ---- App ----
-    app_name: str = "flowmind-ai-service"
+    app_name: str = "internsu-ai-service"
     env: Literal["dev", "test", "prod"] = "dev"
     debug: bool = False
     port: int = 8000
@@ -42,7 +42,7 @@ class Settings(BaseSettings):
 
     # ---- Milvus Lite ----
     milvus_db_path: str = "./data/milvus_lite.db"
-    milvus_collection: str = "flowmind_rag"
+    milvus_collection: str = "internsu_rag"
 
     # ---- RAG Pipeline ----
     chunk_size: int = 512

@@ -20,8 +20,8 @@ logger = get_logger(__name__)
 class MemoryManager:
     """Dual-layer conversation memory with sliding window."""
 
-    PREFIX = "flowmind:session"
-    CONV_LIST_KEY = "flowmind:conv_list"
+    PREFIX = "internsu:session"
+    CONV_LIST_KEY = "internsu:conv_list"
     DEFAULT_TTL = 3600   # 1 hour for hot cache
     LONG_TTL = 86400 * 7  # 7 days for conversation list
 
