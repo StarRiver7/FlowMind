@@ -1,4 +1,4 @@
-﻿import uvicorn
+import uvicorn
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -11,6 +11,7 @@ from app.middleware.exception_middleware import app_exception_handler, general_e
 from app.api.v1.chat_api import router as chat_router
 from app.api.v1.rag_api import router as rag_router
 from app.api.v1.health_api import router as health_router
+from app.api.v1.kb_api import router as kb_router
 from app.common.exceptions.exceptions import AppException
 
 log_level = "DEBUG" if settings.debug else "INFO"
@@ -50,6 +51,7 @@ app.add_exception_handler(Exception, general_exception_handler)
 app.include_router(chat_router)
 app.include_router(rag_router)
 app.include_router(health_router)
+app.include_router(kb_router)
 
 
 def main():
