@@ -1,4 +1,4 @@
-"""Retrieval Pipeline — full orchestrated retrieval engine.
+"""Retrieval Pipeline — full orchestrated retrieval engine with citation support.
 
 Complete pipeline:
     User Query
@@ -7,10 +7,11 @@ Complete pipeline:
     ↓ Sparse Retrieval (BM25 keyword search)
     ↓ Score Fusion (weighted hybrid merge)
     ↓ Metadata Boost (title/recent/department)
-    ↓ Rerank (CrossEncoder semantic reorder)
+    ↓ Rerank (CrossEncoder semantic reorder + dedup)
     ↓ Chunk Merge (adjacent context joining)
+    ↓ Citation Build (structured source citations)
     ↓ Source Builder (citation formatting)
-    ↓ Retrieval Context (LLM-ready text)
+    ↓ Retrieval Context (LLM-ready text with citation markers)
 
 Every step produces a trace event for SSE streaming.
 """
@@ -24,8 +25,11 @@ from app.rag.retrieval.dense_retriever import dense_retriever
 from app.rag.retrieval.sparse_retriever import sparse_retriever
 from app.rag.retrieval.score_fusion import score_fusion
 from app.rag.retrieval.metadata_boost import metadata_boost
-from app.rag.retrieval.reranker import reranker
+from app.rag.rerank.reranker import reranker as semantic_reranker
 from app.rag.retrieval.chunk_merger import chunk_merger
+from app.rag.citation.citation_builder import citation_builder
+from app.rag.citation.citation_models import CitationSet
+from app.rag.citation.source_formatter import source_formatter
 from app.rag.retrieval.source_builder import source_builder
 from app.rag.retrieval.retrieval_context import retrieval_context as rc_builder
 from app.core.config import settings
@@ -36,12 +40,13 @@ logger = get_logger(__name__)
 
 @dataclass
 class RetrievalResult:
-    """Complete retrieval result."""
+    """Complete retrieval result with citations."""
     query: str
     rewritten_query: str = ""
     chunks: list[dict] = field(default_factory=list)
     merged_chunks: list[dict] = field(default_factory=list)
     sources: list[dict] = field(default_factory=list)
+    citation_set: Optional[CitationSet] = None
     context_text: str = ""
     dense_count: int = 0
     sparse_count: int = 0
@@ -50,11 +55,12 @@ class RetrievalResult:
     total_chars: int = 0
     elapsed_ms: int = 0
     truncated: bool = False
+    trust_level: str = "medium"
     traces: list[dict] = field(default_factory=list)
 
 
 class RetrievalPipeline:
-    """Orchestrated retrieval pipeline with full trace support.
+    """Orchestrated retrieval pipeline with citation-aware output.
 
     Usage:
         pipeline = RetrievalPipeline()
@@ -64,8 +70,10 @@ class RetrievalPipeline:
             department_id=10,
             space_ids=[1, 2],
         )
-        # result.context_text → formatted context for LLM
-        # result.sources → structured citations
+        # result.context_text → citation-aware context for LLM
+        # result.citation_set → structured citations
+        # result.sources → formatted source references
+        # result.trust_level → "high" | "medium" | "low"
         # result.traces → step-by-step events for SSE
     """
 
@@ -74,8 +82,9 @@ class RetrievalPipeline:
         self._sparse = sparse_retriever
         self._fusion = score_fusion
         self._boost = metadata_boost
-        self._reranker = reranker
+        self._reranker = semantic_reranker
         self._merger = chunk_merger
+        self._citation_builder = citation_builder
 
     async def retrieve(
         self,
@@ -92,17 +101,15 @@ class RetrievalPipeline:
         enable_boost: bool = True,
         enable_rerank: bool = True,
         enable_merge: bool = True,
+        enable_citation: bool = True,
         build_context: bool = True,
         max_context_tokens: int = 3000,
         stream_traces: Optional[list[dict]] = None,
     ) -> RetrievalResult:
-        """Execute the complete retrieval pipeline.
+        """Execute the complete retrieval pipeline with citations.
 
-        If stream_traces is provided (a list reference), trace events
-        are appended to it in real-time for SSE streaming.
-
-        Returns:
-            RetrievalResult with full metadata and traces.
+        If stream_traces is provided, trace events are appended
+        in real-time for SSE streaming.
         """
         start = time.time()
         traces: list[dict] = []
@@ -125,99 +132,89 @@ class RetrievalPipeline:
         rewritten = query
         if enable_rewrite:
             rewritten = await query_rewriter.rewrite(query)
-            _trace("rewrite_query", {
-                "original": query[:50],
-                "rewritten": rewritten[:80],
-            })
-        else:
-            _trace("rewrite_query", {"skipped": True})
 
         # ── Phase 2: Dense Retrieval ──
-        _trace("dense_retrieval", {"query": rewritten[:50]})
+        _trace("dense_retrieval")
         dense_results = await self._dense.retrieve(
-            rewritten,
-            top_k=top_k,
-            score_threshold=0.0,  # Get all, filter after fusion
-            user_id=user_id,
-            department_id=department_id,
-            space_ids=space_ids,
-            document_ids=document_ids,
+            rewritten, top_k=top_k, score_threshold=0.0,
+            user_id=user_id, department_id=department_id,
+            space_ids=space_ids, document_ids=document_ids,
         )
         _trace("dense_retrieval", {"count": len(dense_results)})
 
         # ── Phase 3: Sparse Retrieval ──
-        _trace("sparse_retrieval", {"query": rewritten[:50]})
+        _trace("sparse_retrieval")
         sparse_results = self._sparse.search(
-            rewritten,
-            dense_results if dense_results else [],
-            top_k=top_k,
+            rewritten, dense_results if dense_results else [], top_k=top_k,
         )
         _trace("sparse_retrieval", {"count": len(sparse_results)})
 
         # ── Phase 4: Score Fusion ──
-        _trace("score_fusion", {
-            "dense_count": len(dense_results),
-            "sparse_count": len(sparse_results),
-            "method": "weighted",
-            "weights": {
-                "dense": self._fusion._dense_w,
-                "sparse": self._fusion._sparse_w,
-            },
-        })
+        _trace("score_fusion")
         fused = self._fusion.fuse_weighted(dense_results, sparse_results)
         fused = self._fusion.deduplicate(fused)
         _trace("score_fusion", {"fused_count": len(fused)})
 
         # ── Phase 5: Metadata Boost ──
         if enable_boost and fused:
-            _trace("metadata_boost", {"count": len(fused)})
-            fused = self._boost.apply(
-                fused,
-                query=rewritten,
-                department_id=department_id,
-            )
-            _trace("metadata_boost", {"boosted": True})
+            _trace("metadata_boost")
+            fused = self._boost.apply(fused, query=rewritten, department_id=department_id)
 
-        # ── Phase 6: Rerank ──
+        # ── Phase 6: Semantic Rerank (CrossEncoder + Dedup + Composite Score) ──
         if enable_rerank and fused:
-            _trace("rerank", {"count": len(fused)})
+            _trace("rerank", {"candidates": len(fused)})
             fused = await self._reranker.rerank(
                 rewritten, fused,
-                top_n=final_k * 2,  # Get extra for merge
-                score_threshold=score_threshold,
+                top_n=final_k * 2,
+                score_threshold=0.0,
             )
-            _trace("rerank", {"count": len(fused)})
+            _trace("rerank", {"reranked_count": len(fused)})
 
         # ── Phase 7: Chunk Merge ──
         if enable_merge and len(fused) > 1:
-            _trace("chunk_merge", {"count": len(fused)})
+            _trace("chunk_merge", {"before": len(fused)})
             merged = self._merger.merge(fused)
-            _trace("chunk_merge", {
-                "before": len(fused),
-                "after": len(merged),
-            })
+            _trace("chunk_merge", {"after": len(merged)})
         else:
             merged = fused
-            _trace("chunk_merge", {"skipped": True})
+            if len(fused) <= 1:
+                _trace("chunk_merge", {"skipped": True})
 
-        # Limit to final_k
+        # Apply threshold + limit
+        merged = [c for c in merged if c.get("score", 0) >= score_threshold]
         merged = merged[:final_k]
 
-        # ── Phase 8: Source Builder ──
-        _trace("source_builder", {"count": len(merged)})
+        # ── Phase 8: Citation Build ──
+        citation_set = None
+        if enable_citation and merged:
+            _trace("citation_build", {"chunks": len(merged)})
+            citation_set = self._citation_builder.build(
+                query=query,
+                chunks=merged,
+            )
+            _trace("citation_build", {
+                "citations": citation_set.count,
+                "trust_level": citation_set.trust_level,
+            })
+
+        # ── Phase 9: Source Builder ──
+        _trace("source_builder")
         sources = source_builder.build_batch(merged)
         sources = source_builder.deduplicate_sources(sources)
-        _trace("source_builder", {"sources": len(sources)})
 
-        # ── Phase 9: Retrieval Context ──
+        # ── Phase 10: Retrieval Context ──
         ctx_result = {}
         if build_context and merged:
-            _trace("context_builder", {"count": len(merged)})
-            ctx_result = rc_builder.build(
-                merged,
-                query=query,
-                max_tokens=max_context_tokens,
-            )
+            _trace("context_builder")
+            # Use citation-aware context format when citations exist
+            if citation_set and citation_set.citations:
+                ctx_result = self._build_citation_context(
+                    merged, citation_set, query=query, max_tokens=max_context_tokens,
+                )
+            else:
+                ctx_result = rc_builder.build(
+                    merged, query=query, max_tokens=max_context_tokens,
+                )
             _trace("context_builder", {
                 "chars": ctx_result.get("total_chars", 0),
                 "truncated": ctx_result.get("truncated", False),
@@ -228,8 +225,9 @@ class RetrievalPipeline:
 
         logger.info(
             f"[RetrievalPipeline] '{query[:50]}': "
-            f"dense={len(dense_results)} sparse={len(sparse_results)} "
-            f"fused={len(fused)} merged={len(merged)} → {len(sources)} sources "
+            f"d={len(dense_results)} s={len(sparse_results)} "
+            f"fused={len(fused)} merged={len(merged)} "
+            f"citations={citation_set.count if citation_set else 0} "
             f"in {elapsed}ms"
         )
 
@@ -239,6 +237,7 @@ class RetrievalPipeline:
             chunks=fused,
             merged_chunks=merged,
             sources=sources,
+            citation_set=citation_set,
             context_text=ctx_result.get("context_text", ""),
             dense_count=len(dense_results),
             sparse_count=len(sparse_results),
@@ -247,24 +246,47 @@ class RetrievalPipeline:
             total_chars=ctx_result.get("total_chars", 0),
             elapsed_ms=elapsed,
             truncated=ctx_result.get("truncated", False),
+            trust_level=citation_set.trust_level if citation_set else "medium",
             traces=traces,
         )
 
-    async def retrieve_context_only(
+    def _build_citation_context(
         self,
-        query: str,
-        **kwargs,
-    ) -> str:
-        """Retrieve and return only the formatted context text."""
+        chunks: list[dict],
+        citation_set: CitationSet,
+        *,
+        query: str = "",
+        max_tokens: int = 3000,
+    ) -> dict:
+        """Build citation-aware context using SourceFormatter."""
+        context_text = source_formatter.format_llm_context_block(
+            citation_set.citations,
+            max_sources=5,
+        )
+
+        total_chars = len(context_text)
+        truncated = False
+
+        # Token budget check
+        max_chars = int(max_tokens * 2.0)
+        if total_chars > max_chars:
+            context_text = context_text[:max_chars]
+            truncated = True
+
+        return {
+            "context_text": context_text,
+            "sources": [c.to_dict() for c in citation_set.citations],
+            "total_chunks": len(chunks),
+            "included_chunks": citation_set.count,
+            "total_chars": total_chars,
+            "truncated": truncated,
+        }
+
+    async def retrieve_context_only(self, query: str, **kwargs) -> str:
         result = await self.retrieve(query, **kwargs)
         return result.context_text
 
-    async def search_raw(
-        self,
-        query: str,
-        **kwargs,
-    ) -> list[dict]:
-        """Retrieve and return raw merged chunks only (no context building)."""
+    async def search_raw(self, query: str, **kwargs) -> list[dict]:
         result = await self.retrieve(query, build_context=False, **kwargs)
         return result.merged_chunks
 
