@@ -37,6 +37,10 @@ from app.rag.pipeline.document_pipeline import document_pipeline
 from app.rag.pipeline.async_pipeline import async_pipeline
 from app.rag.chunk.chunk_storage import chunk_storage
 from app.rag.chunk.chunk_service import chunk_service
+from app.rag.retrieval.retriever import retriever, RetrievalResult
+from app.rag.retrieval.hybrid_search import hybrid_search
+from app.rag.vector_store.vector_repository import vector_repository
+from app.rag.vector_store.milvus_client import milvus_client
 
 from app.core.logger import get_logger
 
@@ -417,3 +421,77 @@ async def check_document_quality(
     result = chunk_service.quality_check(db, doc_id)
     return ApiResponse(data=result).model_dump()
 
+
+
+# ============================================================
+# Retrieval / Search endpoints
+# ============================================================
+
+@router.post("/search", response_model=ApiResponse)
+async def search_knowledge_base(
+    request: Request,
+    query: str = Form(...),
+    top_k: int = Form(default=5),
+    space_id: Optional[int] = Form(default=None),
+    db: Session = Depends(get_db),
+):
+    """Search knowledge base with hybrid retrieval."""
+    try:
+        user_id = _get_current_user_id(request)
+        department_id = _get_current_department_id(request)
+        space_ids = [space_id] if space_id else None
+
+        result = await retriever.retrieve(
+            query=query,
+            top_k=top_k * 2,
+            final_k=top_k,
+            user_id=user_id,
+            department_id=department_id,
+            space_ids=space_ids,
+            build_context=True,
+        )
+
+        return ApiResponse(
+            message="search completed",
+            data={
+                "query": result.query,
+                "chunks": result.chunks,
+                "sources": result.sources,
+                "context_text": result.context_text,
+                "total_chunks": result.total_chunks,
+                "total_chars": result.total_chars,
+                "elapsed_ms": result.elapsed_ms,
+                "truncated": result.truncated,
+            },
+        ).model_dump()
+    except Exception as e:
+        logger.error(f"[KB-API] search error: {e}", exc_info=True)
+        return ErrorResponse(code=500, message="search failed").model_dump()
+
+
+@router.post("/document/{doc_id}/index", response_model=ApiResponse)
+async def index_document(
+    doc_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Index document chunks into Milvus."""
+    try:
+        result = await vector_repository.index_document(db, doc_id)
+        if result.get("success"):
+            return ApiResponse(message="index complete", data=result).model_dump()
+        else:
+            return ErrorResponse(code=400, message=result.get("error", "index failed")).model_dump()
+    except Exception as e:
+        logger.error(f"[KB-API] index error doc_id={doc_id}: {e}", exc_info=True)
+        return ErrorResponse(code=500, message="index failed, please retry").model_dump()
+
+
+@router.get("/milvus/stats", response_model=ApiResponse)
+async def get_milvus_stats():
+    """Get Milvus collection stats."""
+    try:
+        count = milvus_client.count()
+        return ApiResponse(data={"total_vectors": count}).model_dump()
+    except Exception as e:
+        return ErrorResponse(code=500, message=str(e)).model_dump()

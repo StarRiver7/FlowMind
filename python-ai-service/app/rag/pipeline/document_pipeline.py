@@ -24,6 +24,7 @@ from app.rag.parser.md_parser import MdParser
 from app.rag.parser.txt_parser import TxtParser
 from app.rag.parser.text_cleaner import text_cleaner, CleaningReport
 from app.rag.chunk.chunk_service import chunk_service
+from app.rag.vector_store.vector_repository import vector_repository
 from app.rag.chunk.chunk_strategy import ChunkConfig
 from app.kb.file_storage import file_storage
 from app.kb.document_service import document_service
@@ -181,7 +182,33 @@ class DocumentPipeline:
                 f"quality={'PASS' if qa_result['passed'] else 'ISSUES'}"
             )
 
-            # ── Stage 4: Update Document ──
+            # ---- Stage 4: Embedding + Milvus Index ----
+            stage_start = time.time()
+            document_service.update_status(db, document_id, DocumentStatus.EMBEDDING)
+            db.commit()
+            
+
+            import asyncio
+            loop = asyncio.new_event_loop()
+            index_result = loop.run_until_complete(
+                vector_repository.index_document(db, document_id)
+            )
+            loop.close()
+
+            if not index_result.get("success"):
+                raise ValueError(index_result.get("error", "vector index failed"))
+
+            embed_elapsed = int((time.time() - stage_start) * 1000)
+            stages.append({
+                "stage": "embedding",
+                "status": "completed",
+                "elapsed_ms": embed_elapsed,
+                "vector_count": index_result.get("vector_count", 0),
+                "detail": f"vector index: {index_result.get('vector_count', 0)} vectors",
+            })
+            logger.info(f"[Pipeline] Stage 4 Embedding: {embed_elapsed}ms")
+
+            # ---- Stage 5: Final Status ----
             document_service.update_status(
                 db, document_id,
                 new_status=DocumentStatus.CHUNKED,
