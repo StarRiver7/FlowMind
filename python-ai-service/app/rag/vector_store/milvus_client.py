@@ -1,4 +1,4 @@
-"""Milvus Client — enterprise Milvus Lite client with schema-aware operations.
+"""Milvus Client — InternSU Milvus Lite client with schema-aware operations.
 
 Features:
   - Schema-based collection management
@@ -27,7 +27,7 @@ logger = get_logger(__name__)
 
 
 class MilvusClient:
-    """Enterprise Milvus Lite client."""
+    """InternSU Milvus Lite client."""
 
     def __init__(
         self,

@@ -1,4 +1,4 @@
-"""Milvus Schema — enterprise-grade collection schema definition.
+"""Milvus Schema — InternSU collection schema definition.
 
 Field design for RAG retrieval with full metadata traceability:
 

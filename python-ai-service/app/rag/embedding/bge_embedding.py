@@ -1,4 +1,4 @@
-"""BGE-M3 Embedding — enterprise-grade BGE model wrapper.
+"""BGE-M3 Embedding — InternSU BGE model wrapper.
 
 Wraps the existing app.pipeline.embedder.EmbeddingEngine with:
   - BGE-M3 dense embeddings (1024-dim)
@@ -17,7 +17,7 @@ class BgeEmbedding:
     """BGE-M3 embedding provider.
 
     Thin wrapper around the existing EmbeddingEngine,
-    adding enterprise features: health checks, dimension info, batch sizing.
+    adding InternSU features: health checks, dimension info, batch sizing.
     """
 
     def __init__(self):

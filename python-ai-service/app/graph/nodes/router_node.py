@@ -1,10 +1,9 @@
-
 """Router 路由节点。
 
-职责:
-  根据 intent 决定下游节点。
-  当前阶段: 所有意图均路由到 chat_node。
-  Phase 2: 扩展 rag_node / sql_node 分支。
+根据 intent 决定下游节点:
+  - chat  → chat_node
+  - sql   → sql_node
+  - rag   → rag_retrieval_node (Phase 6.4)
 """
 
 import time
@@ -25,16 +24,24 @@ async def router_node(state: InternState) -> InternState:
 
     intent = state.get("intent", "chat")
 
+    # Determine next node
+    next_node_map = {
+        "chat": "chat_node",
+        "sql": "sql_node",
+        "rag": "rag_retrieval_node",
+    }
+    next_node = next_node_map.get(intent, "chat_node")
+
     state["trace_steps"] = state.get("trace_steps", []) + [{
         "node": "router_node",
         "message": f"正在分配任务: {_intent_cn(intent)}",
         "status": "completed",
-        "detail": {"intent": intent, "next": "chat_node"},
+        "detail": {"intent": intent, "next": next_node},
         "duration_ms": int((time.time() - t0) * 1000),
         "timestamp": _now(),
     }]
 
-    logger.info(f"RouterNode: intent={intent} -> chat_node")
+    logger.info(f"RouterNode: intent={intent} -> {next_node}")
     return state
 
 

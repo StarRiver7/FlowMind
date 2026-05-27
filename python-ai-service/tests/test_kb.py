@@ -1,4 +1,4 @@
-"""Tests for enterprise Knowledge Base upload system.
+"""Tests for InternSU Knowledge Base upload system.
 
 Coverage:
   1. File validation (type, size, MIME, magic)

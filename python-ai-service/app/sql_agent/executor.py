@@ -19,7 +19,7 @@ class SQLExecutor:
     def __init__(self):
         self._readonly_url = os.getenv(
             "SQL_READONLY_URL",
-            os.getenv("DATABASE_URL", "mysql+pymysql://readonly:readonly@localhost:3306/enterprise_ai"),
+            os.getenv("DATABASE_URL", "mysql+pymysql://readonly:readonly@localhost:3306/internsu"),
         )
 
     async def execute(self, sql: str, timeout: int = 30) -> dict:

@@ -1,4 +1,4 @@
-"""Embedding Service — enterprise embedding pipeline orchestrator.
+"""Embedding Service — InternSU embedding pipeline orchestrator.
 
 Orchestrates: chunk loading → cache check → batch embedding → result aggregation.
 """
