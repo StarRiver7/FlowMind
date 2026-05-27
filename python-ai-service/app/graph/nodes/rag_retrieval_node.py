@@ -1,20 +1,21 @@
-"""RAG Retrieval Node — LangGraph node for knowledge base retrieval.
+"""RAG Retrieval Node — focused retrieval with query rewrite + agentic fallback.
 
 Flow:
-  1. Build retrieval context from user query + permissions
-  2. Execute full retrieval pipeline (rewrite → dense → sparse → fuse → ... → context)
-  3. Populate state with RAG context and sources
-  4. Route to answer_node for response generation
+  1. Query Rewrite (LLM expansion)
+  2. Hybrid Retrieval (dense + sparse + fuse)
+  3. Metadata Filter (permission isolation)
+  4. Agentic Fallback (retry with expanded query if no results)
 
-Integrates with the new RetrievalPipeline for enterprise-grade retrieval.
+Writes: retrieval_results, retrieval_count, query_rewritten, retrieval_elapsed_ms
 """
 
 import time
-from typing import Optional
 from datetime import datetime, timezone
 
 from app.graph.state import InternState
-from app.rag.retrieval.retriever import retriever, RetrievalResult
+from app.graph.routers.rag_router import should_clarify_rag
+from app.rag.retrieval.retriever import retriever
+from app.rag.retrieval.query_rewrite import query_rewriter
 from app.rag.permission_filter import permission_filter
 from app.core.config import settings
 from app.core.logger import get_logger
@@ -23,25 +24,19 @@ logger = get_logger(__name__)
 
 
 async def rag_retrieval_node(state: InternState) -> InternState:
-    """RAG retrieval node for LangGraph.
+    """Execute retrieval with query rewrite and agentic fallback.
 
-    Reads: state["user_message"], permission_context, space_ids
-    Writes: state["retrieved_docs"], state["rag_context"], state["sources"]
-
-    The retrieval pipeline runs:
-      query → rewrite → dense → sparse → fuse → boost → rerank → merge → context
-    and each step is traced in state["trace_steps"].
+    Agentic behavior:
+      - Attempt 1: original query → hybrid retrieval
+      - Attempt 2 (fallback): rewritten query → hybrid retrieval
+      - Attempt 3 (exhausted): mark as failed
     """
     t0 = time.time()
     state["current_node"] = "rag_retrieval_node"
+    state["rag_triggered"] = True
 
-    # Start trace
-    state["trace_steps"] = state.get("trace_steps", []) + [{
-        "node": "rag_retrieval_node",
-        "message": "正在搜索企业知识库...",
-        "status": "running",
-        "timestamp": _now(),
-    }]
+    # Trace
+    _add_trace(state, "正在搜索企业知识库...")
 
     query = state["user_message"]
     user_id = _to_int(state.get("user_id", "0"))
@@ -49,26 +44,45 @@ async def rag_retrieval_node(state: InternState) -> InternState:
     department_id = permission_ctx.get("department_id")
     space_ids = state.get("space_ids") or permission_ctx.get("allowed_space_ids") or []
 
-    # Collect stream traces for SSE
-    stream_traces: list[dict] = []
+    attempts = state.get("retrieval_attempts", 0) + 1
+    state["retrieval_attempts"] = attempts
 
+    # ── Phase 1: Query Rewrite ──
+    _add_trace(state, "正在优化查询...")
+    rewritten = query
     try:
-        # Execute full retrieval pipeline
-        result: RetrievalResult = await retriever.retrieve(
-            query=query,
+        rewritten = await query_rewriter.rewrite(query)
+        state["query_rewritten"] = rewritten
+    except Exception:
+        state["query_rewritten"] = query
+
+    # Use rewritten query for attempts > 1 (agentic fallback)
+    search_query = rewritten if attempts > 1 else query
+    state["retrieval_query"] = search_query
+
+    _add_trace(state, f"查询已优化: {search_query[:40]}...")
+
+    # ── Phase 2: Hybrid Retrieval ──
+    _add_trace(state, "正在进行混合检索...")
+    try:
+        result = await retriever.retrieve(
+            query=search_query,
             top_k=settings.rag_top_k,
-            final_k=settings.rag_final_k,
-            score_threshold=settings.rag_score_threshold,
+            final_k=settings.rag_final_k * 2,  # Get extra for rerank
+            score_threshold=0.0,  # Filter after rerank
             user_id=user_id,
             department_id=department_id,
             space_ids=space_ids,
-            stream_traces=stream_traces,
+            enable_rewrite=False,  # Already rewritten above
+            enable_rerank=False,   # Separate node handles this
+            enable_merge=False,    # Separate node handles this
+            enable_citation=False, # Separate node handles this
+            build_context=False,   # Separate node handles this
         )
 
-        hit_count = result.final_count
+        chunks = result.merged_chunks if result.merged_chunks else result.chunks
 
-        # Apply permission filter (extra safety layer)
-        chunks = result.merged_chunks
+        # Permission filter
         if permission_ctx and chunks:
             filtered = permission_filter.filter_chunks(
                 chunks=chunks,
@@ -80,87 +94,56 @@ async def rag_retrieval_node(state: InternState) -> InternState:
         else:
             filtered = chunks
 
-        # Populate state
+        state["retrieval_results"] = filtered
+        state["retrieval_count"] = len(filtered)
         state["retrieved_docs"] = filtered
-        state["filtered_docs"] = filtered
-        state["rag_context"] = result.context_text
-        state["sources"] = result.sources
-
-        # Map pipeline traces to LangGraph trace_steps format
-        _trace_map = {
-            "rewrite_query": "正在优化查询...",
-            "dense_retrieval": "正在进行语义检索...",
-            "sparse_retrieval": "正在进行关键词检索...",
-            "score_fusion": "正在融合检索结果...",
-            "metadata_boost": "正在优化排序...",
-            "rerank": "正在重排序知识片段...",
-            "chunk_merge": "正在合并上下文...",
-            "source_builder": "正在构建引用信息...",
-            "context_builder": "正在组织知识内容...",
-        }
-
-        for trace in result.traces:
-            step_name = trace.get("step", "")
-            detail = trace.get("detail", {})
-            if step_name in _trace_map:
-                state["trace_steps"].append({
-                    "node": "rag_retrieval_node",
-                    "message": _trace_map[step_name],
-                    "status": "completed",
-                    "detail": detail,
-                    "sub_step": step_name,
-                    "timestamp": _now(),
-                })
-
-        duration_ms = int((time.time() - t0) * 1000)
-
-        # Complete the main trace
-        state["trace_steps"][-1] = {
-            "node": "rag_retrieval_node",
-            "message": f"已检索到 {len(filtered)} 条相关知识",
-            "status": "completed",
-            "detail": {
-                "dense_count": result.dense_count,
-                "sparse_count": result.sparse_count,
-                "fused_count": result.fused_count,
-                "final_count": len(filtered),
-                "truncated": result.truncated,
-                "elapsed_ms": result.elapsed_ms,
-            },
-            "duration_ms": duration_ms,
-            "timestamp": _now(),
-        }
-
-        logger.info(
-            f"[RAGNode] '{query[:40]}': {len(filtered)} chunks, "
-            f"{len(result.sources)} sources in {duration_ms}ms"
-        )
 
     except Exception as e:
-        logger.warning(f"RAG retrieval failed (continuing without): {e}")
-        duration_ms = int((time.time() - t0) * 1000)
-
+        logger.warning(f"Retrieval failed: {e}")
+        state["retrieval_results"] = []
+        state["retrieval_count"] = 0
         state["retrieved_docs"] = []
-        state["filtered_docs"] = []
-        state["rag_context"] = (
-            "收到老师～我刚刚搜索知识库时遇到一点问题，请稍后再试～"
-        )
-        state["sources"] = []
 
-        state["trace_steps"][-1] = {
-            "node": "rag_retrieval_node",
-            "message": "知识检索暂时不可用",
-            "status": "failed",
-            "detail": {"error": str(e)[:200]},
-            "duration_ms": duration_ms,
-            "timestamp": _now(),
-        }
+    # ── Phase 3: Agentic Fallback Check ──
+    retrieval_count = state["retrieval_count"]
+
+    if retrieval_count == 0 and attempts < 3:
+        state["retrieval_fallback_used"] = True
+        _add_trace(state, f"首次检索无结果，正在进行第{attempts}次智能重试...")
+        logger.info(
+            f"[RAGRetrieval] Attempt {attempts}: 0 results, "
+            f"will retry with rewritten query"
+        )
+        # Don't mark as failed yet — router will re-enter this node
+        state["retrieval_failed"] = False
+    elif retrieval_count == 0:
+        state["retrieval_failed"] = True
+        _add_trace(state, "多次检索后仍未找到相关内容")
+        logger.warning("[RAGRetrieval] All attempts exhausted, no results")
+    else:
+        state["retrieval_failed"] = False
+        _add_trace(state, f"检索到 {retrieval_count} 条相关知识")
+
+    state["retrieval_elapsed_ms"] = int((time.time() - t0) * 1000)
+
+    logger.info(
+        f"[RAGRetrieval] '{query[:40]}': {retrieval_count} results, "
+        f"attempt={attempts}, {state['retrieval_elapsed_ms']}ms"
+    )
 
     return state
 
 
+def _add_trace(state: InternState, message: str):
+    state["trace_steps"] = state.get("trace_steps", []) + [{
+        "node": "rag_retrieval_node",
+        "message": message,
+        "status": "running",
+        "timestamp": _now(),
+    }]
+
+
 def _to_int(value) -> int:
-    """Safely convert to int."""
     try:
         return int(value)
     except (ValueError, TypeError):

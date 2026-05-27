@@ -7,15 +7,53 @@ from app.graph.nodes.task_resume_node import task_resume_node
 from app.graph.nodes.router_node import router_node
 from app.graph.nodes.chat_node import chat_node
 from app.graph.nodes.sql_node import sql_node
+
+# ── RAG Sub-Graph Nodes ──
 from app.graph.nodes.rag_retrieval_node import rag_retrieval_node
+from app.graph.nodes.rag_rerank_node import rag_rerank_node
+from app.graph.nodes.citation_node import citation_node
 from app.graph.nodes.rag_answer_node import rag_answer_node
+
+# ── Memory ──
+from app.graph.nodes.memory_node import memory_node
+
 from app.graph.nodes.response_node import response_node
-from app.graph.edges.routes import route_after_intent, route_after_slot_collect, route_after_router
+from app.graph.edges.routes import (
+    route_after_intent, route_after_slot_collect, route_after_router,
+    route_after_rag_retrieval, route_after_rag_rerank, route_after_rag_citation,
+)
 from app.core.logger import get_logger
 logger = get_logger(__name__)
 
+
 def build_intern_graph():
+    """Build the full Agentic RAG LangGraph.
+
+    Graph Structure:
+        START
+          │
+          ▼
+        intent_node
+          │
+          ├─ clarify_node ──→ END
+          ├─ slot_collect_node ──→ task_resume_node ──→ router_node
+          └─ router_node
+               │
+               ├─ chat_node ──→ response_node ──→ memory_node ──→ END
+               ├─ sql_node  ──→ response_node ──→ memory_node ──→ END
+               └─ rag_retrieval_node
+                    │
+                    ├─ rag_rerank_node ──→ citation_node ──→ rag_answer_node
+                    │                                            │
+                    └─ rag_answer_node (skip rerank if no results)│
+                                                                  │
+                    ┌─────────────────────────────────────────────┘
+                    ▼
+               response_node ──→ memory_node ──→ END
+    """
     graph = StateGraph(InternState)
+
+    # ── Core Nodes ──
     graph.add_node("intent_node", intent_node)
     graph.add_node("clarify_node", clarify_node)
     graph.add_node("slot_collect_node", slot_collect_node)
@@ -23,33 +61,138 @@ def build_intern_graph():
     graph.add_node("router_node", router_node)
     graph.add_node("chat_node", chat_node)
     graph.add_node("sql_node", sql_node)
-    graph.add_node("rag_retrieval_node", rag_retrieval_node)
-    graph.add_node("rag_answer_node", rag_answer_node)
     graph.add_node("response_node", response_node)
+    graph.add_node("memory_node", memory_node)
+
+    # ── RAG Sub-Graph Nodes ──
+    graph.add_node("rag_retrieval_node", rag_retrieval_node)
+    graph.add_node("rag_rerank_node", rag_rerank_node)
+    graph.add_node("citation_node", citation_node)
+    graph.add_node("rag_answer_node", rag_answer_node)
+
+    # ── Entry ──
     graph.set_entry_point("intent_node")
-    graph.add_conditional_edges("intent_node", route_after_intent, {"clarify_node": "clarify_node", "slot_collect_node": "slot_collect_node", "router_node": "router_node"})
-    graph.add_conditional_edges("slot_collect_node", route_after_slot_collect, {"clarify_node": "clarify_node", "task_resume_node": "task_resume_node"})
+
+    # ── Intent → Clarify / Slot / Router ──
+    graph.add_conditional_edges(
+        "intent_node", route_after_intent,
+        {
+            "clarify_node": "clarify_node",
+            "slot_collect_node": "slot_collect_node",
+            "router_node": "router_node",
+        },
+    )
+
+    # ── Slot Collect → Clarify / Task Resume ──
+    graph.add_conditional_edges(
+        "slot_collect_node", route_after_slot_collect,
+        {
+            "clarify_node": "clarify_node",
+            "task_resume_node": "task_resume_node",
+        },
+    )
+
     graph.add_edge("clarify_node", END)
     graph.add_edge("task_resume_node", "router_node")
-    graph.add_conditional_edges("router_node", route_after_router, {"chat_node": "chat_node", "sql_node": "sql_node", "rag_answer_node": "rag_answer_node"})
+
+    # ── Router → Chat / SQL / RAG Retrieval ──
+    graph.add_conditional_edges(
+        "router_node", route_after_router,
+        {
+            "chat_node": "chat_node",
+            "sql_node": "sql_node",
+            "rag_retrieval_node": "rag_retrieval_node",
+        },
+    )
+
+    # ── RAG Sub-Graph: Retrieval → Rerank / Answer (with fallback) ──
+    graph.add_conditional_edges(
+        "rag_retrieval_node", route_after_rag_retrieval,
+        {
+            "rag_rerank_node": "rag_rerank_node",
+            "rag_answer_node": "rag_answer_node",
+            "clarify_node": "clarify_node",  # Agentic: retry with clarification
+        },
+    )
+
+    # ── Rerank → Citation / Skip ──
+    graph.add_conditional_edges(
+        "rag_rerank_node", route_after_rag_rerank,
+        {
+            "citation_node": "citation_node",
+            "rag_answer_node": "rag_answer_node",
+        },
+    )
+
+    # ── Citation → Answer / Clarify (low trust) ──
+    graph.add_conditional_edges(
+        "citation_node", route_after_rag_citation,
+        {
+            "rag_answer_node": "rag_answer_node",
+            "clarify_node": "clarify_node",
+        },
+    )
+
+    # ── Answer / Chat / SQL → Response → Memory → END ──
     graph.add_edge("chat_node", "response_node")
     graph.add_edge("sql_node", "response_node")
     graph.add_edge("rag_answer_node", "response_node")
-    graph.add_edge("response_node", END)
+    graph.add_edge("response_node", "memory_node")
+    graph.add_edge("memory_node", END)
+
     return graph.compile()
 
+
 class InternGraph:
+    """Agentic InternSU LangGraph with full RAG pipeline."""
+
     def __init__(self):
         self._graph = build_intern_graph()
-    async def run(self, user_id, conversation_id, message, history=None, model_name="deepseek-chat", restore_state=None):
-        state = create_initial_state(user_id=user_id, conversation_id=conversation_id, message=message, history=history, model_name=model_name, restore_state=restore_state)
-        logger.info(f"Graph START: msg={message[:30]}, restore_clarify={restore_state.get("clarify_pending") if restore_state else False}")
+
+    async def run(
+        self,
+        user_id: str,
+        conversation_id: str,
+        message: str,
+        history: list[dict] = None,
+        model_name: str = "deepseek-chat",
+        restore_state: dict = None,
+    ) -> dict:
+        """Run the graph with multi-turn support.
+
+        If restore_state contains prior RAG context, it flows into
+        the new turn for multi-turn RAG conversations.
+        """
+        state = create_initial_state(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            message=message,
+            history=history,
+            model_name=model_name,
+            restore_state=restore_state,
+        )
+
+        logger.info(
+            f"Graph START: msg={message[:30]}, "
+            f"restore_clarify={restore_state.get('clarify_pending') if restore_state else False}"
+        )
+
         result = await self._graph.ainvoke(state)
-        logger.info(f"Graph END: intent={result.get("intent")}, clarify_pending={result.get("clarify_pending")}, final_answer_len={len(result.get("final_answer", ""))}, traces={len(result.get("trace_steps", []))}")
-        logger.info(f"Graph done: {len(result.get("trace_steps", []))} steps")
+
+        logger.info(
+            f"Graph END: intent={result.get('intent')}, "
+            f"clarify_pending={result.get('clarify_pending')}, "
+            f"final_answer_len={len(result.get('final_answer', ''))}, "
+            f"rag_triggered={result.get('rag_triggered', False)}, "
+            f"citations={result.get('citation_count', 0)}, "
+            f"traces={len(result.get('trace_steps', []))}"
+        )
+
         return result
+
     @property
     def graph(self):
         return self._graph
+
 
 intern_graph = InternGraph()

@@ -1,0 +1,122 @@
+"""Citation Node — build structured citations from reranked results.
+
+Takes rerank_results → CitationBuilder → CitationSet + Trust Assessment.
+
+Writes: citations, citation_set, citation_count, trust_level, rag_context
+"""
+
+import time
+from datetime import datetime, timezone
+
+from app.graph.state import InternState
+from app.rag.citation.citation_builder import citation_builder
+from app.rag.citation.source_formatter import source_formatter
+from app.rag.retrieval.source_builder import source_builder
+from app.rag.retrieval.retrieval_context import retrieval_context as rc_builder
+from app.core.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+async def citation_node(state: InternState) -> InternState:
+    """Build structured citations from reranked results.
+
+    Reads: rerank_results, user_message
+    Writes: citations, citation_set, citation_count, trust_level,
+            rag_context, rag_context_tokens
+    """
+    t0 = time.time()
+    state["current_node"] = "citation_node"
+
+    _add_trace(state, "正在构建引用来源...")
+
+    chunks = state.get("rerank_results", [])
+    query = state.get("user_message", "")
+
+    if not chunks:
+        state["citations"] = []
+        state["citation_set"] = None
+        state["citation_count"] = 0
+        state["trust_level"] = "unreliable"
+        state["rag_context"] = ""
+        state["rag_context_tokens"] = 0
+        _add_trace(state, "无结果可构建引用")
+        return state
+
+    try:
+        # Build citations
+        citation_set = citation_builder.build(query=query, chunks=chunks)
+
+        state["citations"] = [c.to_dict() for c in citation_set.citations]
+        state["citation_set"] = citation_set.to_dict()
+        state["citation_count"] = citation_set.count
+        state["trust_level"] = citation_set.trust_level
+
+        # Build source documents summary
+        state["source_documents"] = [
+            {
+                "document_name": c.document_name,
+                "page_number": c.page_number,
+                "knowledge_base": c.knowledge_base,
+                "relevance_score": c.relevance_score,
+                "citation_id": c.citation_id,
+            }
+            for c in citation_set.citations
+        ]
+
+        # Build RAG context (citation-aware)
+        rag_context = source_formatter.format_llm_context_block(
+            citation_set.citations,
+            max_sources=5,
+        )
+        state["rag_context"] = rag_context
+        state["rag_context_tokens"] = len(rag_context) // 2  # Rough estimate
+        state["rag_context_truncated"] = len(rag_context) > 6000
+
+        _add_trace(
+            state,
+            f"已构建 {citation_set.count} 条引用，可信度: {citation_set.trust_level}"
+        )
+
+    except Exception as e:
+        logger.warning(f"Citation build failed: {e}")
+        # Fallback: simple source builder
+        sources = source_builder.build_batch(chunks)
+        state["citations"] = sources
+        state["citation_count"] = len(sources)
+        state["trust_level"] = "medium"
+        state["rag_context"] = _build_fallback_context(chunks)
+        state["rag_context_tokens"] = 0
+        _add_trace(state, "引用构建降级，使用简化格式")
+
+    logger.info(
+        f"[CitationNode] {len(chunks)} chunks → "
+        f"{state['citation_count']} citations, "
+        f"trust={state['trust_level']}"
+    )
+
+    return state
+
+
+def _build_fallback_context(chunks: list[dict]) -> str:
+    parts = ["## 知识库检索结果"]
+    for i, c in enumerate(chunks):
+        name = c.get("document_name", "unknown")
+        page = c.get("page_number", 0)
+        content = c.get("content", "")
+        parts.append(f"\n---\n[来源{i+1}] {name}" + (f" 第{page}页" if page else ""))
+        parts.append(content[:800])
+    return "\n".join(parts)
+
+
+def _add_trace(state: InternState, message: str):
+    state["trace_steps"] = state.get("trace_steps", []) + [{
+        "node": "citation_node",
+        "message": message,
+        "status": "running",
+        "timestamp": _now(),
+    }]
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()

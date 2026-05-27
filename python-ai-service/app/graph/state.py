@@ -1,13 +1,20 @@
 from typing import TypedDict, Annotated, Optional
 from operator import add
 
-class InternState(TypedDict):
+class InternState(TypedDict, total=False):
+    # ── Session ──
     conversation_id: str
     user_id: str
     user_message: str
     conversation_context: Annotated[list[dict], add]
+    permission_context: dict
+
+    # ── Intent ──
     intent: str
     intent_confidence: float
+    intent_detail: str               # "rag_query" | "sql_query" | "chat" | "clarify"
+
+    # ── Clarify ──
     clarify_required: bool
     clarify_question: str
     clarify_round: int
@@ -18,9 +25,48 @@ class InternState(TypedDict):
     clarify_finished: bool
     pending_task: str
     task_context: dict
+
+    # ── RAG Pipeline ──
+    rag_triggered: bool              # Whether RAG was activated
+    query_rewritten: str             # LLM-rewritten query
+    retrieval_query: str             # Actual query used for retrieval
+    space_ids: list[int]             # Allowed knowledge bases
+    retrieval_top_k: int             # Top-K for retrieval
+    retrieval_results: list[dict]    # Raw hybrid retrieval results
+    retrieval_count: int             # Number of raw hits
+    retrieval_elapsed_ms: int        # Retrieval timing
+
+    # ── Rerank ──
+    rerank_results: list[dict]       # Re-ranked chunks
+    rerank_count: int                # Post-rerank count
+    rerank_elapsed_ms: int           # Rerank timing
+    rerank_strategy: str             # "heuristic" | "semantic"
+
+    # ── Citation ──
+    citations: list[dict]            # Structured citation objects
+    citation_set: Optional[dict]     # Full CitationSet dict
+    citation_count: int              # Number of citations
+    trust_level: str                 # "high" | "medium" | "low" | "unreliable"
+    citation_highlights: dict        # Source highlight map
+
+    # ── RAG Context ──
+    rag_context: str                 # Formatted context for LLM
+    rag_context_tokens: int          # Estimated token count
+    rag_context_truncated: bool      # Whether context was truncated
+    source_documents: list[dict]     # Source document info
+
+    # ── Answer ──
+    rag_answer: str                  # Final RAG answer
+    answer_sources: list[dict]       # Sources used in answer
+
+    # ── Agentic Retrieval ──
+    retrieval_attempts: int          # Number of retrieval attempts
+    retrieval_fallback_used: bool    # Whether fallback was triggered
+    retrieval_failed: bool           # Whether all retrieval failed
+
+    # ── Graph ──
     current_node: str
     next_node: str
-    sources: list[dict]
     trace_steps: list[dict]
     system_prompt: str
     final_answer: str
@@ -29,15 +75,32 @@ class InternState(TypedDict):
     error: Optional[str]
     done: bool
 
-def create_initial_state(user_id, conversation_id, message, history=None, model_name=None, restore_state=None):
-    if model_name is None: model_name = "deepseek-chat"
-    if restore_state is None: restore_state = {}
+
+def create_initial_state(
+    user_id: str,
+    conversation_id: str,
+    message: str,
+    history: list[dict] = None,
+    model_name: str = "deepseek-chat",
+    restore_state: dict = None,
+) -> InternState:
+    if model_name is None:
+        model_name = "deepseek-chat"
+    if restore_state is None:
+        restore_state = {}
     rs = restore_state
+
     return InternState(
-        conversation_id=conversation_id, user_id=user_id, user_message=message,
+        conversation_id=conversation_id,
+        user_id=user_id,
+        user_message=message,
         conversation_context=history or [],
+        permission_context=rs.get("permission_context", {}),
+
         intent=rs.get("intent", "chat"),
         intent_confidence=rs.get("intent_confidence", 0.0),
+        intent_detail=rs.get("intent_detail", "chat"),
+
         clarify_required=rs.get("clarify_required", False),
         clarify_question=rs.get("clarify_question", ""),
         clarify_round=rs.get("clarify_round", 0),
@@ -48,8 +111,47 @@ def create_initial_state(user_id, conversation_id, message, history=None, model_
         clarify_finished=rs.get("clarify_finished", False),
         pending_task=rs.get("pending_task", ""),
         task_context=rs.get("task_context", {}),
-        current_node="", next_node="",
-        sources=[], trace_steps=[],
-        system_prompt="", final_answer="", tokens_used=0,
-        model_name=model_name, error=None, done=False,
+
+        rag_triggered=False,
+        query_rewritten="",
+        retrieval_query="",
+        space_ids=rs.get("space_ids", []),
+        retrieval_top_k=20,
+        retrieval_results=[],
+        retrieval_count=0,
+        retrieval_elapsed_ms=0,
+
+        rerank_results=[],
+        rerank_count=0,
+        rerank_elapsed_ms=0,
+        rerank_strategy="heuristic",
+
+        citations=[],
+        citation_set=None,
+        citation_count=0,
+        trust_level="medium",
+        citation_highlights={},
+
+        rag_context="",
+        rag_context_tokens=0,
+        rag_context_truncated=False,
+        source_documents=[],
+
+        rag_answer="",
+        answer_sources=[],
+
+        retrieval_attempts=0,
+        retrieval_fallback_used=False,
+        retrieval_failed=False,
+
+        current_node="",
+        next_node="",
+        trace_steps=[],
+        sources=rs.get("sources", []),
+        system_prompt="",
+        final_answer="",
+        tokens_used=0,
+        model_name=model_name,
+        error=None,
+        done=False,
     )
