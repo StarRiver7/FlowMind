@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { ToolbarType } from './types';
 
-import { computed } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 
 import { preferences, usePreferences } from '@vben/preferences';
 
@@ -40,12 +40,76 @@ const { authPanelCenter, authPanelLeft, authPanelRight, isDark } =
  * @zh_CN 根据主题选择合适的 logo 图标
  */
 const logoSrc = computed(() => {
-  // 如果是暗色主题且提供了 logoDark，则使用暗色主题的 logo
   if (isDark.value && props.logoDark) {
     return props.logoDark;
   }
-  // 否则使用默认的 logo
   return props.logo;
+});
+
+function getTimeBasedGreeting() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) {
+    return 'Good morning, 老师~';
+  } else if (hour >= 12 && hour < 14) {
+    return 'Good noon, 老师~';
+  } else if (hour >= 14 && hour < 18) {
+    return 'Good afternoon, 老师~';
+  } else if (hour >= 18 && hour < 22) {
+    return 'Good evening, 老师~';
+  } else {
+    return 'Good night, 老师~';
+  }
+}
+
+const baseSlogans = [
+  'Hi 老师，欢迎回家~',
+  '老师，需要 "认证" 才可以进入系统哦',
+  '老师，上班快要迟到了！',
+  '老师，今天也要加油鸭~',
+  '小 Su 在这里等老师呢',
+  '老师，咖啡已备好~',
+  'Have a nice day, 老师~',
+  '老师，工作要劳逸结合哦',
+  '小 Su 提醒老师：该充电了~',
+  '老师，一起探索 AI 吧',
+  'Welcome back, 老师~',
+  '老师，今天想做什么呢？',
+  '小 Su 已经迫不及待啦',
+  '老师，准备好了吗？',
+  'Let\'s get started, 老师~',
+  '老师，喝杯茶休息一下',
+  '小 Su 为老师服务~',
+  '老师，我们开始吧！',
+  '老师，美好的一天从登录开始~',
+];
+
+const slogans = computed(() => {
+  const greeting = getTimeBasedGreeting();
+  return [greeting, ...baseSlogans];
+});
+
+const currentSloganIndex = ref(0);
+const isAnimating = ref(false);
+let intervalId: ReturnType<typeof setInterval> | null = null;
+
+function nextSlogan() {
+  if (isAnimating.value) return;
+  isAnimating.value = true;
+  
+  setTimeout(() => {
+    currentSloganIndex.value = (currentSloganIndex.value + 1) % slogans.value.length;
+    isAnimating.value = false;
+  }, 600);
+}
+
+onMounted(() => {
+  intervalId = setInterval(nextSlogan, 5000);
+});
+
+onUnmounted(() => {
+  if (intervalId) {
+    clearInterval(intervalId);
+  }
 });
 </script>
 
@@ -75,22 +139,7 @@ const logoSrc = computed(() => {
       </template>
     </AuthenticationFormView>
 
-    <slot name="logo">
-      <!-- 头部 Logo 和应用名称 -->
-      <div
-        v-if="logoSrc || appName"
-        class="absolute top-0 left-0 z-10 flex flex-1"
-        @click="clickLogo"
-      >
-        <div
-          class="mt-4 ml-4 flex flex-1 items-center text-foreground sm:top-6 sm:left-6 lg:text-foreground"
-        >
-          <p v-if="pageTitle" class="m-0 text-xl font-medium">
-            FlowMind
-          </p>
-        </div>
-      </div>
-    </slot>
+    <slot name="logo"></slot>
 
     <!-- 系统介绍 -->
     <div v-if="!authPanelCenter" class="relative hidden w-0 flex-1 lg:block">
@@ -118,11 +167,12 @@ const logoSrc = computed(() => {
             />
           </template>
           
-          <div class="text-1xl mt-6 font-sans text-foreground lg:text-2xl">
-            企业的聪明大管家
-          </div>
-          <div class="mt-2 dark:text-muted-foreground">
-            管家界的小鲜肉，AI里的老司机
+          <div class="slogan-container text-1xl mt-6 font-sans text-foreground lg:text-2xl">
+            <Transition name="slogan-fade" mode="out-in">
+              <span :key="currentSloganIndex">
+                {{ slogans[currentSloganIndex] }}
+              </span>
+            </Transition>
           </div>
         </div>
       </div>
@@ -156,6 +206,14 @@ const logoSrc = computed(() => {
       class="min-h-full w-2/5 flex-1"
       data-side="right"
     >
+      <template v-if="copyright" #copyright>
+        <slot name="copyright">
+          <Copyright
+            v-if="preferences.copyright.enable"
+            v-bind="preferences.copyright"
+          />
+        </slot>
+      </template>
     </AuthenticationFormView>
   </div>
 </template>
@@ -164,6 +222,30 @@ const logoSrc = computed(() => {
 .login-background {
   background: rgba(14, 116, 144, 0.05);
   filter: blur(80px);
+}
+
+.slogan-container {
+  height: 1.5em;
+  overflow: hidden;
+  position: relative;
+}
+
+.slogan-fade-enter-active {
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slogan-fade-leave-active {
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slogan-fade-enter-from {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.slogan-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-20px);
 }
 
 .color-orb {

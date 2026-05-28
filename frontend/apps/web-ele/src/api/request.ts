@@ -1,5 +1,5 @@
 ﻿/**
- * FlowMind 统一请求封装
+ * InternSU 统一请求封装
  * 自动适配 Java SpringBoot (code:200) 与 Python FastAPI
  */
 import type { RequestClientOptions } from '@vben/request';

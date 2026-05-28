@@ -22,7 +22,7 @@ public class Knife4jConfig {
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("FlowMind（Enterprise AI Agent Platform）API")
+                        .title("InternSU（Enterprise AI Agent Platform）API")
                         .version("1.0.0")
                         .description("企业级AI Agent智能办公平台 — Java Core Backend")
                         .contact(new Contact()

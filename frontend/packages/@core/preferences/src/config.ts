@@ -28,7 +28,7 @@ const defaultPreferences: Preferences = {
     layout: 'sidebar-nav',
     locale: 'zh-CN',
     loginExpiredMode: 'page',
-    name: 'Vben Admin',
+    name: 'InternSU',
     preferencesButtonPosition: 'auto',
     timezone: 'Asia/Shanghai',
     watermark: false,

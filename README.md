@@ -1,11 +1,11 @@
-﻿# FlowMind - Enterprise AI Agent Platform
+﻿# InternSU - Enterprise AI Agent Platform
 
 Multi-service AI agent orchestration platform with RAG pipeline, LLM integration, and workflow automation.
 
 ## Architecture
 
 ```
-FlowMind/
+InternSU/
 ├── frontend/           Vue Vben Admin (Element Plus) - port 5777
 ├── java-service/       Spring Boot 3 + MyBatis Plus - port 8080
 ├── python-ai-service/  FastAPI + LangChain + LangGraph - port 8000
@@ -38,7 +38,7 @@ scripts\stop-all.bat
 
 1. Detects port conflicts, auto-releases occupied ports
 2. Checks Node.js (`F:\node22\`), pnpm, Java, Conda
-3. Creates Conda env `flowmind` if missing
+3. Creates Conda env `internsu` if missing
 4. Installs Python dependencies via pip
 5. Launches 3 services in separate `cmd` windows
 6. Waits for each to be ready, then opens the browser
@@ -47,9 +47,9 @@ scripts\stop-all.bat
 
 | Window Title               | Command                          |
 |----------------------------|----------------------------------|
-| `FlowMind - Frontend :5777` | `pnpm run dev:ele` (Element Plus) |
-| `FlowMind - Python AI :8000` | `uvicorn app.main:app --reload`  |
-| `FlowMind - Java :8080`     | `mvnw spring-boot:run`           |
+| `InternSU - Frontend :5777` | `pnpm run dev:ele` (Element Plus) |
+| `InternSU - Python AI :8000` | `uvicorn app.main:app --reload`  |
+| `InternSU - Java :8080`     | `mvnw spring-boot:run`           |
 
 ## Manual Start
 
@@ -70,7 +70,7 @@ pnpm run dev:ele    # Vite HMR on port 5777
 
 ```powershell
 cd python-ai-service
-conda activate flowmind
+conda activate internsu
 pip install -r requirements.txt   # first run only
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
@@ -137,7 +137,7 @@ Edit these lines near the top of `start-all.bat` if your paths differ:
 set "NODE_HOME=F:\node22\node-v22.14.0-win-x64"
 
 :: Your Conda environment name for this project
-set "CONDA_ENV=flowmind"
+set "CONDA_ENV=InternSU"
 ```
 
 ## Troubleshooting

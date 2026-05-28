@@ -16,7 +16,7 @@ public class LoginReq {
     private String username;
 
     @Size(max = 128, message = "邮箱最长128位")
-    @Schema(description = "邮箱（邮箱登录时使用）", example = "admin@flowmind.com")
+    @Schema(description = "邮箱（邮箱登录时使用）", example = "admin@internsu.com")
     private String email;
 
     @NotBlank(message = "密码不能为空")

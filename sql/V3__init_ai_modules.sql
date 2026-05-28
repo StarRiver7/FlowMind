@@ -120,7 +120,7 @@ CREATE TABLE IF NOT EXISTS t_audit_log (
 -- 默认Prompt模板（修正版）
 INSERT INTO t_prompt_template (name, prompt_type, description, system_template, user_template, status, version, create_time) VALUES
 ('default-system', 'system', '默认对话System Prompt',
- 'You are FlowMind, an enterprise AI assistant. Answer accurately based on provided context. If you do not know, say so. Cite sources when using context documents.',
+ 'You are InternSU, an enterprise AI assistant. Answer accurately based on provided context. If you do not know, say so. Cite sources when using context documents.',
  '{{ user_message }}',
  'active', 1, NOW()),
 ('rag-system', 'rag', 'RAG知识检索System Prompt',

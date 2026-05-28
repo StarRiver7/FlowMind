@@ -6,7 +6,7 @@ const userStore = useUserStore();
 <template>
   <div class="dashboard-home">
     <div class="welcome-card">
-      <h1>欢迎使用 FlowMind</h1>
+      <h1>欢迎使用</h1>
       <p v-if="userStore.userInfo?.realName">你好，{{ userStore.userInfo.realName }}</p>
       <p class="desc">企业级 AI Agent 平台 — RAG 检索增强生成 · LangGraph Agent 路由 · 知识库管理</p>
       <div class="quick-links">
