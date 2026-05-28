@@ -95,9 +95,13 @@ const logoSrc = computed(() => {
     <!-- 系统介绍 -->
     <div v-if="!authPanelCenter" class="relative hidden w-0 flex-1 lg:block">
       <div
-        class="absolute inset-0 size-full bg-background-deep dark:bg-[#070709]"
+        class="absolute inset-0 size-full bg-background-deep dark:bg-[#0a1929]"
       >
         <div class="login-background absolute top-0 left-0 size-full"></div>
+        <div class="absolute inset-0 overflow-hidden">
+          <div class="color-orb color-orb-green"></div>
+          <div class="color-orb color-orb-blue"></div>
+        </div>
         <div
           :key="authPanelLeft ? 'left' : authPanelRight ? 'right' : 'center'"
           class="mr-20 flex-col-center h-full"
@@ -127,6 +131,10 @@ const logoSrc = computed(() => {
     <!-- 中心认证面板 -->
     <div v-if="authPanelCenter" class="relative flex-center w-full">
       <div class="login-background absolute top-0 left-0 size-full"></div>
+      <div class="absolute inset-0 overflow-hidden">
+        <div class="color-orb color-orb-green"></div>
+        <div class="color-orb color-orb-blue"></div>
+      </div>
       <AuthenticationFormView
         class="w-full rounded-3xl pb-20 shadow-float shadow-primary/5 md:w-2/3 md:bg-background lg:w-1/2 xl:w-[36%]"
         data-side="bottom"
@@ -148,38 +156,122 @@ const logoSrc = computed(() => {
       class="min-h-full w-2/5 flex-1"
       data-side="right"
     >
-      <template v-if="copyright" #copyright>
-        <slot name="copyright">
-          <Copyright
-            v-if="preferences.copyright.enable"
-            v-bind="preferences.copyright"
-          />
-        </slot>
-      </template>
     </AuthenticationFormView>
   </div>
 </template>
 
 <style scoped>
 .login-background {
-  background: linear-gradient(
-    154deg,
-    #07070915 30%,
-    hsl(var(--primary) / 30%) 48%,
-    #07070915 64%
-  );
-  filter: blur(100px);
+  background: rgba(14, 116, 144, 0.05);
+  filter: blur(80px);
+}
+
+.color-orb {
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.5;
+}
+
+.color-orb-green {
+  background: radial-gradient(circle, rgba(34, 197, 94, 0.6) 0%, rgba(34, 197, 94, 0.2) 70%, transparent 100%);
+  animation: orb-float-green 12s ease-in-out infinite;
+}
+
+.color-orb-blue {
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.6) 0%, rgba(59, 130, 246, 0.2) 70%, transparent 100%);
+  animation: orb-float-blue 15s ease-in-out infinite;
+}
+
+@keyframes orb-float-green {
+  0% {
+    left: 25%;
+    top: 35%;
+    opacity: 0.5;
+  }
+  15% {
+    left: 40%;
+    top: 25%;
+    opacity: 0.7;
+  }
+  30% {
+    left: 55%;
+    top: 35%;
+    opacity: 0.5;
+  }
+  45% {
+    left: 60%;
+    top: 50%;
+    opacity: 0.6;
+  }
+  60% {
+    left: 45%;
+    top: 55%;
+    opacity: 0.7;
+  }
+  75% {
+    left: 30%;
+    top: 50%;
+    opacity: 0.5;
+  }
+  90% {
+    left: 20%;
+    top: 40%;
+    opacity: 0.6;
+  }
+  100% {
+    left: 25%;
+    top: 35%;
+    opacity: 0.5;
+  }
+}
+
+@keyframes orb-float-blue {
+  0% {
+    right: 25%;
+    top: 40%;
+    opacity: 0.5;
+  }
+  20% {
+    right: 40%;
+    top: 50%;
+    opacity: 0.6;
+  }
+  40% {
+    right: 50%;
+    top: 35%;
+    opacity: 0.7;
+  }
+  60% {
+    right: 35%;
+    top: 25%;
+    opacity: 0.5;
+  }
+  80% {
+    right: 20%;
+    top: 45%;
+    opacity: 0.6;
+  }
+  100% {
+    right: 25%;
+    top: 40%;
+    opacity: 0.5;
+  }
 }
 
 .dark {
   .login-background {
-    background: linear-gradient(
-      154deg,
-      #07070915 30%,
-      hsl(var(--primary) / 20%) 48%,
-      #07070915 64%
-    );
-    filter: blur(100px);
+    background: rgba(6, 78, 59, 0.1);
+  }
+  
+  .color-orb-green {
+    background: radial-gradient(circle, rgba(22, 163, 74, 0.5) 0%, rgba(22, 163, 74, 0.15) 70%, transparent 100%);
+  }
+  
+  .color-orb-blue {
+    background: radial-gradient(circle, rgba(37, 99, 235, 0.5) 0%, rgba(37, 99, 235, 0.15) 70%, transparent 100%);
   }
 }
 </style>

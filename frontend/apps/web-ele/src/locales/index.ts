@@ -11,10 +11,8 @@ import {
   setupI18n as coreSetup,
   loadLocalesMapFromDir,
 } from '@vben/locales';
-import { preferences } from '@vben/preferences';
 
 import dayjs from 'dayjs';
-import enLocale from 'element-plus/es/locale/lang/en';
 import defaultLocale from 'element-plus/es/locale/lang/zh-cn';
 
 const elementLocale = ref<Language>(defaultLocale);
@@ -25,6 +23,7 @@ const localesMap = loadLocalesMapFromDir(
   /\.\/langs\/([^/]+)\/(.*)\.json$/,
   modules,
 );
+
 /**
  * 加载应用特有的语言包
  * 这里也可以改造为从服务端获取翻译数据
@@ -51,21 +50,7 @@ async function loadThirdPartyMessage(lang: SupportedLanguagesType) {
  * @param lang
  */
 async function loadDayjsLocale(lang: SupportedLanguagesType) {
-  let locale;
-  switch (lang) {
-    case 'en-US': {
-      locale = await import('dayjs/locale/en');
-      break;
-    }
-    case 'zh-CN': {
-      locale = await import('dayjs/locale/zh-cn');
-      break;
-    }
-    // 默认使用英语
-    default: {
-      locale = await import('dayjs/locale/en');
-    }
-  }
+  const locale = await import('dayjs/locale/zh-cn');
   if (locale) {
     dayjs.locale(locale);
   } else {
@@ -78,21 +63,12 @@ async function loadDayjsLocale(lang: SupportedLanguagesType) {
  * @param lang
  */
 async function loadElementLocale(lang: SupportedLanguagesType) {
-  switch (lang) {
-    case 'en-US': {
-      elementLocale.value = enLocale;
-      break;
-    }
-    case 'zh-CN': {
-      elementLocale.value = defaultLocale;
-      break;
-    }
-  }
+  elementLocale.value = defaultLocale;
 }
 
 async function setupI18n(app: App, options: LocaleSetupOptions = {}) {
   await coreSetup(app, {
-    defaultLocale: preferences.app.locale,
+    defaultLocale: 'zh-CN',
     loadMessages,
     missingWarn: !import.meta.env.PROD,
     ...options,
