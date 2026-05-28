@@ -32,7 +32,6 @@ import {
   useExtraMenu,
   useMixedMenu,
 } from './menu';
-import { LayoutTabbar } from './tabbar';
 
 defineOptions({ name: 'BasicLayout' });
 
@@ -259,8 +258,6 @@ const headerSlots = computed(() => {
     :sidebar-theme-sub="sidebarThemeSub"
     :sidebar-width="preferences.sidebar.width"
     :side-collapse-width="preferences.sidebar.collapseWidth"
-    :tabbar-enable="preferences.tabbar.enable"
-    :tabbar-height="preferences.tabbar.height"
     :z-index="preferences.app.zIndex"
     @side-mouse-leave="handleSideMouseLeave"
     @toggle-sidebar="toggleSidebar"
@@ -389,14 +386,6 @@ const headerSlots = computed(() => {
           <slot name="logo-text"></slot>
         </template>
       </VbenLogo>
-    </template>
-
-    <template #tabbar>
-      <LayoutTabbar
-        v-if="preferences.tabbar.enable"
-        :show-icon="preferences.tabbar.showIcon"
-        :theme="theme"
-      />
     </template>
 
     <!-- 主体内容 -->

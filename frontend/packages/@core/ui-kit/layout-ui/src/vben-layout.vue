@@ -21,7 +21,6 @@ import {
   LayoutFooter,
   LayoutHeader,
   LayoutSidebar,
-  LayoutTabbar,
 } from './components';
 import { useLayout } from './hooks/use-layout';
 
@@ -59,8 +58,6 @@ const props = withDefaults(defineProps<Props>(), {
   sidebarThemeSub: 'dark',
   sidebarWidth: 180,
   sideCollapseWidth: 60,
-  tabbarEnable: true,
-  tabbarHeight: 40,
   zIndex: 200,
 });
 
@@ -119,9 +116,6 @@ const headerWrapperHeight = computed(() => {
   let height = 0;
   if (props.headerVisible && !props.headerHidden) {
     height += props.headerHeight;
-  }
-  if (props.tabbarEnable) {
-    height += props.tabbarHeight;
   }
   return height;
 });
@@ -269,38 +263,6 @@ const mainStyle = computed(() => {
   }
   return {
     sidebarAndExtraWidth,
-    width,
-  };
-});
-
-// 计算 tabbar 的样式
-const tabbarStyle = computed((): CSSProperties => {
-  let width: string;
-  let marginLeft = 0;
-
-  // 如果不是混合导航，tabbar 的宽度为 100%
-  if (!isMixedNav.value || props.sidebarHidden) {
-    width = '100%';
-  } else if (sidebarEnable.value) {
-    // 鼠标在侧边栏上时，且侧边栏展开时的宽度
-    const onHoveringWidth = sidebarExpandOnHover.value
-      ? props.sidebarWidth
-      : getSideCollapseWidth.value;
-
-    // 设置 marginLeft，根据侧边栏是否折叠来决定
-    marginLeft = sidebarCollapse.value
-      ? getSideCollapseWidth.value
-      : onHoveringWidth;
-
-    // 设置 tabbar 的宽度，计算方式为 100% 减去侧边栏的宽度
-    width = `calc(100% - ${sidebarCollapse.value ? getSidebarWidth.value : onHoveringWidth}px)`;
-  } else {
-    // 默认情况下，tabbar 的宽度为 100%
-    width = '100%';
-  }
-
-  return {
-    marginLeft: `${marginLeft}px`,
     width,
   };
 });
@@ -583,13 +545,7 @@ const idMainContent = ELEMENT_ID_MAIN_CONTENT;
           <slot name="header"></slot>
         </LayoutHeader>
 
-        <LayoutTabbar
-          v-if="tabbarEnable"
-          :height="tabbarHeight"
-          :style="tabbarStyle"
-        >
-          <slot name="tabbar"></slot>
-        </LayoutTabbar>
+      
       </div>
 
       <!-- </div> -->
