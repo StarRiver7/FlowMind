@@ -10,10 +10,7 @@ import { VbenFullScreen, VbenIconButton } from '@vben-core/shadcn-ui';
 
 import {
   GlobalSearch,
-  LanguageToggle,
-  PreferencesButton,
   ThemeToggle,
-  TimezoneButton,
 } from '../../widgets';
 
 interface Props {
@@ -67,31 +64,12 @@ const rightSlots = computed(() => {
         name: 'theme-toggle',
       });
     }
-    if (preferences.widget.languageToggle) {
-      list.push({
-        index: REFERENCE_VALUE + 30,
-        name: 'language-toggle',
-      });
-    }
-    if (preferences.widget.timezone) {
-      list.push({
-        index: REFERENCE_VALUE + 40,
-        name: 'timezone',
-      });
-    }
   }
   // 全屏
   if (preferences.widget.fullscreen) {
     list.push({
       index: REFERENCE_VALUE + 50,
       name: 'fullscreen',
-    });
-  }
-  // 消息通知
-  if (preferences.widget.notification) {
-    list.push({
-      index: REFERENCE_VALUE + 60,
-      name: 'notification',
     });
   }
 

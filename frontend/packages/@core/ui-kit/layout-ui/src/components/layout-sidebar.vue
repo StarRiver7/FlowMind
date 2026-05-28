@@ -12,6 +12,11 @@ import { SidebarCollapseButton, SidebarFixedButton } from './widgets';
 
 interface Props {
   /**
+   * 始终保持侧边栏展开
+   * @default false
+   */
+  alwaysVisible?: boolean;
+  /**
    * 折叠区域高度
    * @default 42
    */
@@ -94,6 +99,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  alwaysVisible: false,
   collapseHeight: 42,
   collapseWidth: 48,
   domVisible: true,
@@ -201,6 +207,12 @@ watchEffect(() => {
   extraVisible.value = props.fixedExtra ? true : extraVisible.value;
 });
 
+watchEffect(() => {
+  if (props.alwaysVisible) {
+    collapse.value = false;
+  }
+});
+
 function calcMenuWidthStyle(isHiddenDom: boolean): CSSProperties {
   const {
     collapseWidth,
@@ -250,6 +262,9 @@ function handleMouseenter(e: MouseEvent) {
 
 function handleMouseleave() {
   emit('leave');
+  if (props.alwaysVisible) {
+    return;
+  }
   if (props.isSidebarMixed) {
     isLocked.value = false;
   }
