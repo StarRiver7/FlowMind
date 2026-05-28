@@ -1,0 +1,104 @@
+/* ================================================================
+   internSU — Enterprise AI Workbench Global Styles
+   Claude / Cursor / Dify inspired minimal design system
+   ================================================================ */
+
+:root {
+  --isu-bg: #ffffff;
+  --isu-bg-secondary: #f8fafc;
+  --isu-bg-tertiary: #f1f5f9;
+  --isu-border: #e2e8f0;
+  --isu-border-light: #f1f5f9;
+  --isu-text: #1e293b;
+  --isu-text-secondary: #64748b;
+  --isu-text-tertiary: #94a3b8;
+  --isu-primary: #2563eb;
+  --isu-primary-light: #3b82f6;
+  --isu-primary-bg: #eff6ff;
+  --isu-primary-border: #bfdbfe;
+  --isu-success: #10b981;
+  --isu-warning: #f59e0b;
+  --isu-error: #ef4444;
+  --isu-radius: 10px;
+  --isu-radius-lg: 14px;
+  --isu-radius-xl: 18px;
+  --isu-shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --isu-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  --isu-font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --isu-font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+}
+
+/* ── Scrollbar ── */
+.isu-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
+.isu-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.isu-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
+.isu-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ── Animation ── */
+@keyframes isu-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes isu-pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@keyframes isu-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-isu-fade-in { animation: isu-fade-in 0.3s ease-out; }
+.animate-isu-pulse-dot { animation: isu-pulse-dot 1.4s infinite; }
+
+/* ── Message bubble styles ── */
+.isu-bubble-user {
+  background: var(--isu-primary-bg);
+  border: 1px solid var(--isu-primary-border);
+  border-radius: var(--isu-radius-xl) var(--isu-radius-xl) 4px var(--isu-radius-xl);
+}
+.isu-bubble-assistant {
+  background: var(--isu-bg);
+  border: 1px solid var(--isu-border);
+  border-radius: var(--isu-radius-xl) var(--isu-radius-xl) var(--isu-radius-xl) 4px;
+}
+
+/* ── Markdown content ── */
+.isu-markdown { line-height: 1.75; color: var(--isu-text); font-size: 0.9375rem; }
+.isu-markdown h1, .isu-markdown h2, .isu-markdown h3 { font-weight: 600; margin: 1.25em 0 0.5em; }
+.isu-markdown h1 { font-size: 1.3em; }
+.isu-markdown h2 { font-size: 1.15em; }
+.isu-markdown h3 { font-size: 1.05em; }
+.isu-markdown p { margin: 0.5em 0; }
+.isu-markdown ul, .isu-markdown ol { padding-left: 1.5em; margin: 0.5em 0; }
+.isu-markdown li { margin: 0.25em 0; }
+.isu-markdown a { color: var(--isu-primary); text-decoration: none; }
+.isu-markdown a:hover { text-decoration: underline; }
+.isu-markdown blockquote { border-left: 3px solid var(--isu-primary-border); padding-left: 1em; margin: 0.75em 0; color: var(--isu-text-secondary); }
+.isu-markdown table { border-collapse: collapse; width: 100%; margin: 0.75em 0; font-size: 0.875em; }
+.isu-markdown th, .isu-markdown td { border: 1px solid var(--isu-border); padding: 8px 12px; text-align: left; }
+.isu-markdown th { background: var(--isu-bg-secondary); font-weight: 600; }
+.isu-markdown code { font-family: var(--isu-font-mono); font-size: 0.875em; background: var(--isu-bg-secondary); padding: 2px 6px; border-radius: 4px; }
+.isu-markdown pre { background: #1e293b; color: #e2e8f0; border-radius: var(--isu-radius); padding: 16px; overflow-x: auto; margin: 0.75em 0; }
+.isu-markdown pre code { background: none; padding: 0; color: inherit; font-size: 0.8125em; line-height: 1.6; }
+.isu-markdown hr { border: none; border-top: 1px solid var(--isu-border); margin: 1.5em 0; }
+
+/* ── Citation style ── */
+.isu-citation {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 18px; padding: 0 4px;
+  background: var(--isu-primary-bg); color: var(--isu-primary);
+  border-radius: 4px; font-size: 0.6875rem; font-weight: 600;
+  cursor: pointer; vertical-align: super; margin: 0 1px;
+  transition: all 0.15s;
+}
+.isu-citation:hover { background: var(--isu-primary); color: white; }
+
+/* ── Status badges ── */
+.isu-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 500;
+}
+.isu-badge-running { background: #eff6ff; color: #2563eb; }
+.isu-badge-completed { background: #ecfdf5; color: #059669; }
+.isu-badge-failed { background: #fef2f2; color: #dc2626; }
+.isu-badge-pending { background: #f8fafc; color: #64748b; }

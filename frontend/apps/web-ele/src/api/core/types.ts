@@ -1,127 +1,102 @@
-﻿/**
- * FlowMind 共享类型定义
- * 对应 Java/Python 后端的 DTO 结构
- */
-
-/** Java LoginVO.UserInfo */
-export interface JavaUserInfo {
-  id: number;
-  username: string;
-  nickname: string;
-  email: string;
-  avatarUrl: string | null;
-}
-
-/** Java LoginVO 完整响应 */
-export interface LoginResult {
-  accessToken: string;
-  refreshToken: string;
-  tokenType: string;
-  expiresIn: number;
-  userInfo: JavaUserInfo;
-}
-
-/** 知识库文档 */
-export interface Document {
-  id: number;
-  title: string;
-  fileName: string;
-  filePath: string;
-  fileSize: number;
-  fileType: string;
-  description: string;
-  tenantId: string;
-  userId: number;
-  status: number;
-  chunksProcessed: number;
-  createTime: string;
-  updateTime: string;
-}
-
-/** 会话 */
-export interface Conversation {
-  id: number;
-  userId: number;
-  title: string;
-  modelName: string;
-  messageCount: number;
-  lastMessageAt: string;
-  createTime: string;
-}
-
-/** 消息 */
-export interface Message {
-  id: number;
-  conversationId: number;
-  role: 'user' | 'assistant' | 'system' | 'tool';
+/** AI workspace types for internSU frontend */
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
   content: string;
-  intent: string;
-  tokensUsed: number;
-  sources: string;
-  createTime: string;
+  sources?: CitationSource[];
+  trace?: AgentTrace[];
 }
 
-/** 聊天请求（发往 Python AI） */
+export interface CitationSource {
+  document_name: string;
+  page_number?: number;
+  relevance_score?: number;
+  knowledge_base?: string;
+  excerpt?: string;
+  citation_id?: number;
+}
+
+export interface AgentTrace {
+  node: string;
+  message: string;
+  status: 'running' | 'completed' | 'failed';
+  timestamp: number;
+}
+
 export interface ChatRequest {
-  conversation_id: string;
   user_id: string;
+  conversation_id: string;
   message: string;
   model?: string;
-  stream: boolean;
-  use_rag: boolean;
-  use_tools: boolean;
+  stream?: boolean;
 }
 
-/** Source引用 */
-export interface SourceCitation {
-  file: string;
-  score: number;
-  excerpt: string;
-}
-
-/** Python AI 聊天响应 */
 export interface ChatResponse {
-  content: string;
+  answer: string;
+  sources?: CitationSource[];
+  traces?: AgentTrace[];
   conversation_id: string;
-  intent: string;
-  sources: SourceCitation[];
 }
 
-/** RAG 搜索请求 */
-export interface RagSearchRequest {
-  query: string;
-  top_k: number;
-  doc_ids?: number[];
-  tenant_id?: string;
+export interface Conversation {
+  conversation_id: string;
+  title: string;
+  create_time?: string;
+  updated_at?: string;
 }
 
-/** 分页结果 */
+export interface Message {
+  role: string;
+  content: string;
+  sources?: any[];
+  trace?: any[];
+}
+
 export interface PageResult<T> {
   records: T[];
   total: number;
-  size: number;
+  pages: number;
   current: number;
 }
 
-/** Prompt 模板 */
-export interface PromptTemplate {
-  id: string;
+export interface KnowledgeBase {
+  id: number;
   name: string;
-  content: string;
-  variables: string[];
-  version: number;
-  enabled: boolean;
-  createTime: string;
+  description: string;
+  visibility: 'private' | 'department' | 'public';
+  department_id?: number;
+  creator_id: number;
+  document_count: number;
+  chunk_count: number;
+  embedding_model: string;
+  status: number;
+  create_time: string;
+  update_time?: string;
 }
 
-/** 模型配置 */
-export interface ModelConfig {
-  id: string;
-  name: string;
-  provider: 'deepseek' | 'openai';
-  modelName: string;
-  temperature: number;
-  maxTokens: number;
-  apiKey: string;
-  enabled: boolean;
+export interface Document {
+  id: number;
+  knowledge_base_id: number;
+  filename: string;
+  file_type: string;
+  file_size: number;
+  upload_user: number;
+  upload_time: string;
+  parse_status: 'UPLOADED' | 'PARSING' | 'PARSED' | 'CHUNKING' | 'CHUNKED' | 'EMBEDDING' | 'INDEXING' | 'READY' | 'FAILED';
+  embedding_status: string;
+  chunk_count: number;
+  token_count: number;
+}
+
+export interface JavaUserInfo {
+  id: number;
+  username: string;
+  nickname?: string;
+  email?: string;
+  avatarUrl?: string;
+}
+
+export interface LoginResult {
+  accessToken: string;
+  refreshToken?: string;
+  userInfo: JavaUserInfo;
 }

@@ -1,349 +1,334 @@
-﻿<script setup lang="ts">
-import { ref, nextTick, watch } from 'vue';
-import { useChatStore } from '#/store';
-import type { SourceCitation } from '#/api';
-import { chatStreamSSE, createConversation, listConversations, getMessages, listDocuments } from '#/api';
-import ChatMessageBubble from './components/ChatMessageBubble.vue';
+<script setup lang="ts">
+import { ref, nextTick, onMounted, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import ChatInput from './components/ChatInput.vue';
-import SourcePanel from './components/SourcePanel.vue';
+import ChatMessageBubble from './components/ChatMessageBubble.vue';
 import AgentTracePanel from './components/AgentTracePanel.vue';
+import SourcePanel from './components/SourcePanel.vue';
+import { chatStreamSSE, listConversations, createConversation, getMessages } from '#/api/core/chat';
+import type { ChatMessage, AgentTrace, CitationSource } from '#/api/core/types';
 
-const store = useChatStore();
-const inputRef = ref<InstanceType<typeof ChatInput> | null>(null);
-const chatContainer = ref<HTMLElement | null>(null);
-const loadingConvs = ref(false);
-const showRightPanel = ref(true);
+const route = useRoute();
+const router = useRouter();
 
-// 加载会话列表
-async function loadConversations() {
-  loadingConvs.value = true;
+// ── State ──
+const messages = ref<ChatMessage[]>([]);
+const isStreaming = ref(false);
+const currentTrace = ref<AgentTrace[]>([]);
+const currentSources = ref<CitationSource[]>([]);
+const currentAnswer = ref('');
+const convId = ref(route.query.conv as string || '');
+const sessions = ref<{ id: string; title: string; updatedAt: string }[]>([]);
+const showSessions = ref(true);
+const showAgentPanel = ref(true);
+
+// ── Lifecycle ──
+onMounted(async () => {
+  await loadSessions();
+  if (convId.value) await loadMessages(convId.value);
+});
+
+// ── Session Management ──
+async function loadSessions() {
   try {
-    const userId = localStorage.getItem('flowmind_user');
-    if (!userId) return;
-    const u = JSON.parse(userId);
-    const res = await listConversations(u.userId);
-    store.setConversations(res.conversations ?? []);
-  } catch { /* ignore */ }
-  loadingConvs.value = false;
+    const res = await listConversations('1');
+    sessions.value = (res.conversations || []).map((c: any) => ({
+      id: c.conversation_id || c.id,
+      title: c.title || '新对话',
+      updatedAt: c.updated_at || c.create_time || '',
+    }));
+  } catch { /* graceful */ }
 }
 
-// 切换会话
-async function switchConversation(id: string | null) {
-  store.setCurrentConversation(id);
-  if (id) {
-    try {
-      const res = await getMessages(id);
-      const msgs = (res.messages ?? []).map((m: any) => ({
-        id: m.id ?? String(Date.now()),
-        role: m.role,
-        content: m.content,
-        timestamp: Date.now(),
-      }));
-      store.messages = msgs;
-    } catch { /* ignore */ }
-  }
-  await nextTick();
-  scrollToBottom();
+async function loadMessages(id: string) {
+  try {
+    const res = await getMessages(id);
+    messages.value = (res.messages || []).map((m: any) => ({
+      role: m.role,
+      content: m.content,
+      sources: m.sources || [],
+      trace: m.trace || [],
+    }));
+  } catch { /* graceful */ }
 }
 
-// 新建会话
 async function newConversation() {
-  const userId = (() => {
-    try { return JSON.parse(localStorage.getItem('flowmind_user') ?? '{}').userId; } catch { return '0'; }
-  })();
-  try {
-    const res = await createConversation(userId, '新对话');
-    const convId = res.conversation_id;
-    await loadConversations();
-    await switchConversation(convId);
-  } catch {
-    store.setCurrentConversation(null);
-    store.clearMessages();
-  }
+  messages.value = [];
+  currentSources.value = [];
+  currentTrace.value = [];
+  currentAnswer.value = '';
+  convId.value = '';
+  router.replace({ query: {} });
 }
 
-// 发送消息
-async function handleSend(text: string) {
-  if (!text.trim() || store.isStreaming) return;
+async function selectSession(session: { id: string }) {
+  convId.value = session.id;
+  router.replace({ query: { conv: session.id } });
+  await loadMessages(session.id);
+}
 
-  let convId = store.currentConversationId;
-  if (!convId) {
-    const userId = (() => {
-      try { return JSON.parse(localStorage.getItem('flowmind_user') ?? '{}').userId; } catch { return '0'; }
-    })();
-    const res = await createConversation(userId, text.slice(0, 30));
-    convId = res.conversation_id;
-    store.setCurrentConversation(convId);
-    loadConversations();
+// ── Send Message ──
+async function sendMessage(content: string) {
+  if (!content.trim() || isStreaming.value) return;
+
+  // Add user message
+  messages.value.push({ role: 'user', content });
+
+  // Create conversation if needed
+  if (!convId.value) {
+    try {
+      const res = await createConversation('1', content.slice(0, 30));
+      convId.value = res.conversation_id;
+      router.replace({ query: { conv: convId.value } });
+      await loadSessions();
+    } catch { /* use temp id */ }
   }
 
-  // 添加用户消息
-  store.addMessage({
-    id: `user-${Date.now()}`,
-    role: 'user',
-    content: text,
-    timestamp: Date.now(),
-  });
+  // Start streaming
+  isStreaming.value = true;
+  currentAnswer.value = '';
+  currentSources.value = [];
+  currentTrace.value = [];
 
-  // 添加 AI 占位消息
-  store.addMessage({
-    id: `ai-${Date.now()}`,
-    role: 'assistant',
-    content: '',
-    timestamp: Date.now(),
-    streaming: true,
-  });
-  store.isStreaming = true;
-  store.selectedSources = [];
-  store.agentTrace = [];
-
-  await nextTick();
-  scrollToBottom();
-
-  // SSE 流式请求
   try {
     const response = await chatStreamSSE({
-      conversation_id: convId,
-      user_id: (() => {
-        try { return JSON.parse(localStorage.getItem('flowmind_user') ?? '{}').userId; } catch { return '0'; }
-      })(),
-      message: text,
-      stream: true,
-      use_rag: true,
-      use_tools: true,
+      user_id: '1',
+      conversation_id: convId.value,
+      message: content,
+      model: 'deepseek-chat',
     });
 
-    const reader = response.body?.getReader();
-    if (!reader) return;
+    if (!response.ok || !response.body) throw new Error('Stream failed');
+
+    const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
+      buffer = lines.pop() || '';
 
       for (const line of lines) {
         if (line.startsWith('data: ')) {
+          const data = line.slice(6).trim();
+          if (!data) continue;
+
           try {
-            const event = JSON.parse(line.slice(6));
-            if (event.type === 'token') {
-              store.appendToLastMessage(event.content ?? '');
-            } else if (event.type === 'error') {
-              store.appendToLastMessage(`\n\n> 错误: ${event.content}`);
-            } else if (event.type === 'done') {
-              store.setSources(event.sources ?? []);
-              store.finishStreaming();
-            } else if (event.type === 'thinking') {
-              store.addAgentTrace(event.content ?? '');
-            }
-          } catch { /* ignore parse errors */ }
+            const event = JSON.parse(data);
+            handleSSEEvent(event);
+          } catch { /* skip malformed */ }
         }
       }
-      await nextTick();
-      scrollToBottom();
     }
-  } catch (e: any) {
-    store.appendToLastMessage(`\n\n> 连接失败: ${e.message}`);
+  } catch (err: any) {
+    currentAnswer.value = currentAnswer.value || '收到老师～连接暂时中断，请稍后再试～';
+  } finally {
+    // Finalize assistant message
+    if (currentAnswer.value) {
+      messages.value.push({
+        role: 'assistant',
+        content: currentAnswer.value,
+        sources: [...currentSources.value],
+        trace: [...currentTrace.value],
+      });
+    }
+    isStreaming.value = false;
+    currentAnswer.value = '';
+    await loadSessions();
   }
-  store.finishStreaming();
 }
 
-function handleStop() {
-  store.finishStreaming();
+function handleSSEEvent(event: any) {
+  const type = event.type || event.event || '';
+
+  switch (type) {
+    case 'token':
+    case 'delta':
+      currentAnswer.value += event.content || event.data || '';
+      break;
+    case 'trace':
+    case 'step':
+      currentTrace.value.push({
+        node: event.node || event.step || '',
+        message: event.message || '',
+        status: event.status || 'running',
+        timestamp: Date.now(),
+      });
+      break;
+    case 'source':
+    case 'citation':
+      if (event.sources) {
+        currentSources.value = event.sources;
+      } else if (event.document_name) {
+        currentSources.value.push({
+          document_name: event.document_name,
+          page_number: event.page_number,
+          relevance_score: event.score || event.relevance_score,
+          knowledge_base: event.knowledge_base || '',
+          excerpt: event.excerpt || '',
+        });
+      }
+      break;
+    case 'done':
+    case 'complete':
+      // Stream complete
+      break;
+    default:
+      // Try to extract content from any event
+      if (event.content && !currentAnswer.value) {
+        currentAnswer.value = event.content;
+      }
+  }
 }
-
-function scrollToBottom() {
-  nextTick(() => {
-    if (chatContainer.value) {
-      chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
-    }
-  });
-}
-
-// 监听新消息时滚动
-watch(() => store.messages.length, () => {
-  nextTick(() => scrollToBottom());
-});
-
-// 初始化
-loadConversations();
 </script>
 
 <template>
-  <div class="ai-chat-workspace">
-    <!-- 左侧：会话列表 -->
-    <aside class="chat-sidebar">
-      <div class="sidebar-header">
-        <h3>会话</h3>
-        <el-button type="primary" size="small" :icon="'Plus'" @click="newConversation">
-          新建
-        </el-button>
-      </div>
-      <div class="conversation-list" v-loading="loadingConvs">
-        <div
-          v-for="conv in store.conversations"
-          :key="conv.id"
-          class="conv-item"
-          :class="{ active: String(conv.id) === store.currentConversationId }"
-          @click="switchConversation(String(conv.id))"
+  <div class="flex h-full">
+    <!-- Left: Session sidebar -->
+    <aside
+      v-show="showSessions"
+      class="w-64 shrink-0 border-r border-gray-200/80 bg-white flex flex-col"
+    >
+      <div class="p-3">
+        <button
+          class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm text-gray-600
+                 hover:border-blue-200 hover:bg-blue-50/50 transition-all duration-150 flex items-center gap-2"
+          @click="newConversation"
         >
-          <el-icon><ChatLineRound /></el-icon>
-          <span class="conv-title">{{ conv.title || '未命名会话' }}</span>
-          <span class="conv-count">{{ conv.messageCount ?? 0 }}</span>
+          <span class="text-lg">+</span>
+          <span>新建对话</span>
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto px-2">
+        <div
+          v-for="session in sessions"
+          :key="session.id"
+          class="mb-0.5 cursor-pointer rounded-lg px-3 py-2 text-sm transition-all duration-150"
+          :class="convId === session.id
+            ? 'bg-blue-50 text-blue-700 font-medium'
+            : 'text-gray-600 hover:bg-gray-50'"
+          @click="selectSession(session)"
+        >
+          <div class="truncate">{{ session.title }}</div>
+          <div class="mt-0.5 text-[11px] text-gray-400">
+            {{ session.updatedAt?.slice(0, 10) }}
+          </div>
         </div>
-        <el-empty v-if="!loadingConvs && store.conversations.length === 0" description="暂无会话" />
+
+        <div
+          v-if="sessions.length === 0"
+          class="p-4 text-center text-xs text-gray-400"
+        >
+          暂无历史会话
+        </div>
       </div>
     </aside>
 
-    <!-- 中间：聊天区域 -->
-    <main class="chat-main">
-      <div class="chat-messages" ref="chatContainer">
-        <div v-if="store.messages.length === 0" class="chat-welcome">
-          <h1>FlowMind AI</h1>
-          <p>企业级 AI 知识工作台。开始对话，探索你的知识库。</p>
+    <!-- Center: Chat area -->
+    <div class="flex flex-1 flex-col min-w-0">
+      <!-- Toggle sidebar button -->
+      <button
+        class="absolute left-0 top-1/2 z-10 -translate-y-1/2 rounded-r-lg border border-l-0
+               border-gray-200 bg-white px-1 py-4 text-gray-400 hover:text-gray-600 transition-colors"
+        :class="{ 'left-64': showSessions }"
+        @click="showSessions = !showSessions"
+      >
+        {{ showSessions ? '◂' : '▸' }}
+      </button>
+
+      <!-- Messages -->
+      <div class="flex-1 overflow-y-auto px-6 py-4" ref="messagesContainer">
+        <!-- Welcome when empty -->
+        <div
+          v-if="messages.length === 0 && !isStreaming"
+          class="flex flex-col items-center justify-center h-full text-center"
+        >
+          <div class="mb-4 text-4xl">👋</div>
+          <h1 class="mb-2 text-xl font-semibold text-gray-800">
+            老师，今天想让我帮您做什么？
+          </h1>
+          <p class="mb-8 text-sm text-gray-500">
+            我是小SU，您的AI实习生。可以帮您查询制度、分析数据、整理知识。
+          </p>
+
+          <!-- Quick actions -->
+          <div class="grid grid-cols-2 gap-3 max-w-md">
+            <button
+              v-for="action in quickActions"
+              :key="action.label"
+              class="rounded-xl border border-gray-200 bg-white px-4 py-3 text-left
+                     hover:border-blue-200 hover:bg-blue-50/30 transition-all duration-150"
+              @click="sendMessage(action.prompt)"
+            >
+              <div class="text-sm font-medium text-gray-700">{{ action.label }}</div>
+              <div class="mt-0.5 text-xs text-gray-400">{{ action.desc }}</div>
+            </button>
+          </div>
         </div>
+
+        <!-- Message bubbles -->
         <ChatMessageBubble
-          v-for="msg in store.messages"
-          :key="msg.id"
+          v-for="(msg, i) in messages"
+          :key="i"
           :message="msg"
+          @cite-click="(src: CitationSource) => currentSources = [src]"
         />
-      </div>
-      <div class="chat-input-area">
-        <ChatInput
-          ref="inputRef"
-          :streaming="store.isStreaming"
-          @send="handleSend"
-          @stop="handleStop"
-        />
-      </div>
-    </main>
 
-    <!-- 右侧：引用来源 + Agent 链路 -->
-    <aside v-if="showRightPanel" class="chat-right-panel">
-      <el-tabs model-value="sources">
-        <el-tab-pane label="引用来源" name="sources">
-          <SourcePanel :sources="store.selectedSources" />
-        </el-tab-pane>
-        <el-tab-pane label="Agent 链路" name="agent">
-          <AgentTracePanel :trace="store.agentTrace" />
-        </el-tab-pane>
-      </el-tabs>
+        <!-- Streaming answer -->
+        <div
+          v-if="isStreaming && currentAnswer"
+          class="mb-4 rounded-2xl bg-blue-50/50 px-5 py-3"
+        >
+          <div class="mb-1 text-xs font-medium text-blue-600">小SU 正在回复...</div>
+          <div class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+            {{ currentAnswer }}
+            <span class="inline-block w-1.5 h-4 bg-blue-500 animate-pulse align-middle ml-0.5" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat Input -->
+      <div class="shrink-0 border-t border-gray-200/80 bg-white px-6 py-4">
+        <ChatInput
+          :disabled="isStreaming"
+          @send="sendMessage"
+        />
+      </div>
+    </div>
+
+    <!-- Right: Agent panel -->
+    <aside
+      v-show="showAgentPanel"
+      class="w-80 shrink-0 border-l border-gray-200/80 bg-white overflow-y-auto"
+    >
+      <div class="p-1">
+        <AgentTracePanel :traces="currentTrace" :streaming="isStreaming" />
+        <SourcePanel :sources="currentSources" />
+      </div>
     </aside>
+
+    <!-- Toggle agent panel -->
+    <button
+      class="absolute right-0 top-1/2 z-10 -translate-y-1/2 rounded-l-lg border border-r-0
+             border-gray-200 bg-white px-1 py-4 text-gray-400 hover:text-gray-600 transition-colors"
+      :class="{ 'right-80': showAgentPanel }"
+      @click="showAgentPanel = !showAgentPanel"
+    >
+      {{ showAgentPanel ? '▸' : '◂' }}
+    </button>
   </div>
 </template>
 
-<style scoped>
-.ai-chat-workspace {
-  display: flex;
-  height: calc(100vh - var(--vben-header-height, 48px) - 2px);
-  overflow: hidden;
-  background: var(--el-bg-color-page);
-}
-
-.chat-sidebar {
-  width: 260px;
-  flex-shrink: 0;
-  border-right: 1px solid var(--el-border-color-light);
-  display: flex;
-  flex-direction: column;
-  background: var(--el-bg-color);
-}
-
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-}
-
-.sidebar-header h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.conversation-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
-}
-
-.conv-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  transition: background 0.15s;
-}
-
-.conv-item:hover {
-  background: var(--el-fill-color-light);
-}
-
-.conv-item.active {
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
-}
-
-.conv-title {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.conv-count {
-  font-size: 11px;
-  color: var(--el-text-color-secondary);
-}
-
-.chat-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px 32px;
-}
-
-.chat-welcome {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--el-text-color-secondary);
-}
-
-.chat-welcome h1 {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--el-text-color-primary);
-  margin-bottom: 8px;
-}
-
-.chat-input-area {
-  border-top: 1px solid var(--el-border-color-lighter);
-  padding: 16px 32px 24px;
-  background: var(--el-bg-color);
-}
-
-.chat-right-panel {
-  width: 300px;
-  flex-shrink: 0;
-  border-left: 1px solid var(--el-border-color-light);
-  background: var(--el-bg-color);
-  overflow-y: auto;
-}
-</style>
+<script lang="ts">
+const quickActions = [
+  { label: '查询企业制度', desc: '搜索公司规章制度', prompt: '帮我查询公司请假制度' },
+  { label: '查询企业数据', desc: '分析数据库数据', prompt: '统计本月各部门人数' },
+  { label: '上传知识库', desc: '添加企业文档', prompt: '我想上传一份文档到知识库' },
+  { label: 'AI问答', desc: '问任何企业相关的问题', prompt: '员工手册中关于年假的规定是什么？' },
+];
+</script>

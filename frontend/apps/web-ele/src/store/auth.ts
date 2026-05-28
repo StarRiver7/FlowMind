@@ -20,7 +20,7 @@ function mapJavaUserToVben(javaUser: JavaUserInfo, token: string): UserInfo {
   return {
     avatar: javaUser.avatarUrl ?? '',
     desc: javaUser.email ?? '',
-    homePath: '/ai-workspace/chat',
+    homePath: '/home',
     realName: javaUser.nickname ?? javaUser.username,
     roles: ['admin'],
     token,

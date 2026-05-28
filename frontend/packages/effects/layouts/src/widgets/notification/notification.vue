@@ -58,17 +58,7 @@ const handleClear = () => {
 </script>
 <template>
   <VbenPopover v-model:open="open" content-class="relative right-2 w-90 p-0">
-    <template #trigger>
-      <div class="mr-2 flex-center h-full" @click.stop="toggle()">
-        <VbenIconButton class="bell-button relative text-foreground">
-          <span
-            v-if="dot"
-            class="absolute top-0.5 right-0.5 size-2 rounded-sm bg-primary"
-          ></span>
-          <Bell class="size-4" />
-        </VbenIconButton>
-      </div>
-    </template>
+
 
     <div class="relative">
       <div class="flex items-center justify-between p-4 py-3">
