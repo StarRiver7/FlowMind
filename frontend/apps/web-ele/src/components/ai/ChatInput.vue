@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue';
+import { ref, watch, nextTick } from 'vue';
+import { Send, Upload, Database, DatabaseOff, Paperclip, X } from 'lucide-vue-next';
 
 const props = defineProps<{
   disabled?: boolean;
@@ -7,144 +8,153 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  send: [content: string];
-  'update:ragEnabled': [value: boolean];
-  upload: [files: FileList];
+  send: [content: string, files: File[]];
+  toggleRag: [];
 }>();
 
-const input = ref('');
-const textareaRef = ref<HTMLTextAreaElement>();
-const fileInputRef = ref<HTMLInputElement>();
-const showToolbar = ref(false);
-const ragOn = ref(props.ragEnabled ?? true);
+const textareaRef = ref<HTMLTextAreaElement | null>(null);
+const message = ref('');
+const files = ref<File[]>([]);
+const isExpanded = ref(false);
 
-const canSend = computed(() => input.value.trim().length > 0 && !props.disabled);
+const maxHeight = 200;
 
-function handleKeydown(e: KeyboardEvent) {
+function handleInput() {
+  if (!textareaRef.value) return;
+  
+  const scrollHeight = textareaRef.value.scrollHeight;
+  if (scrollHeight > maxHeight) {
+    textareaRef.value.style.height = `${maxHeight}px`;
+    textareaRef.value.style.overflowY = 'auto';
+    isExpanded.value = true;
+  } else {
+    textareaRef.value.style.height = 'auto';
+    textareaRef.value.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
+    textareaRef.value.style.overflowY = 'hidden';
+    isExpanded.value = scrollHeight > 40;
+  }
+}
+
+function handleKeyDown(e: KeyboardEvent) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
-    send();
+    sendMessage();
   }
 }
 
-function send() {
-  if (!canSend.value) return;
-  emit('send', input.value.trim());
-  input.value = '';
-  if (textareaRef.value) {
-    textareaRef.value.style.height = 'auto';
+function sendMessage() {
+  if (!message.value.trim() && files.value.length === 0) return;
+  emit('send', message.value.trim(), [...files.value]);
+  message.value = '';
+  files.value = [];
+  nextTick(() => {
+    if (textareaRef.value) {
+      textareaRef.value.style.height = 'auto';
+    }
+  });
+}
+
+function handleFileSelect(e: Event) {
+  const target = e.target as HTMLInputElement;
+  const selectedFiles = target.files;
+  if (selectedFiles) {
+    files.value = [...files.value, ...Array.from(selectedFiles)];
   }
 }
 
-function autoResize() {
-  const el = textareaRef.value;
-  if (!el) return;
-  el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+function removeFile(index: number) {
+  files.value.splice(index, 1);
 }
 
-function toggleRag() {
-  ragOn.value = !ragOn.value;
-  emit('update:ragEnabled', ragOn.value);
+function clearAllFiles() {
+  files.value = [];
 }
 
-function triggerUpload() {
-  fileInputRef.value?.click();
-}
-
-function onFileChange(e: Event) {
-  const files = (e.target as HTMLInputElement).files;
-  if (files && files.length > 0) {
-    emit('upload', files);
-  }
-  // Reset input
-  if (fileInputRef.value) fileInputRef.value.value = '';
-}
-
-defineExpose({ focus: () => textareaRef.value?.focus() });
+watch(() => message.value, handleInput);
 </script>
 
 <template>
-  <div class="relative w-full">
-    <!-- Toolbar row -->
-    <div class="flex items-center gap-1 mb-2 px-1">
-      <button
-        class="flex items-center justify-center w-8 h-8 rounded-lg transition-colors
-               hover:bg-gray-100 text-gray-400 hover:text-gray-600"
-        title="上传文件"
-        @click="triggerUpload"
+  <div class="bg-white border-t border-gray-100 p-4">
+    <div v-if="files.length > 0" class="mb-3 flex flex-wrap gap-2">
+      <div 
+        v-for="(file, index) in files" 
+        :key="index"
+        class="flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-lg"
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-        </svg>
-      </button>
-      <button
-        class="flex items-center gap-1.5 px-2.5 h-8 rounded-lg text-xs font-medium transition-all
-               border"
-        :class="ragOn
-          ? 'bg-blue-50 border-blue-200 text-blue-600'
-          : 'bg-white border-gray-200 text-gray-400 hover:text-gray-600'"
-        title="企业知识库检索增强 (RAG)"
-        @click="toggleRag"
+        <Paperclip class="w-4 h-4 text-gray-500" />
+        <span class="text-sm text-gray-700 max-w-[200px] truncate">{{ file.name }}</span>
+        <button 
+          @click="removeFile(index)"
+          class="w-5 h-5 rounded-full bg-gray-200 hover:bg-gray-300 flex items-center justify-center"
+        >
+          <X class="w-3 h-3 text-gray-600" />
+        </button>
+      </div>
+      <button 
+        v-if="files.length > 1"
+        @click="clearAllFiles"
+        class="text-sm text-blue-500 hover:text-blue-600"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        RAG
-      </button>
-      <span v-if="disabled" class="ml-auto text-xs text-blue-500 flex items-center gap-1 animate-isu-pulse-dot">
-        <span class="w-1.5 h-1.5 bg-blue-500 rounded-full" />
-        处理中...
-      </span>
-    </div>
-
-    <input
-      ref="fileInputRef"
-      type="file"
-      class="hidden"
-      multiple
-      accept=".pdf,.doc,.docx,.txt,.md,.csv,.xlsx"
-      @change="onFileChange"
-    />
-
-    <!-- Input area -->
-    <div class="relative rounded-2xl border bg-white transition-all duration-200"
-         :class="[
-           disabled ? 'border-gray-200 opacity-60' : 'border-gray-200 focus-within:border-blue-300 focus-within:shadow-[0_0_0_3px_rgba(59,130,246,0.08)]',
-         ]">
-      <textarea
-        ref="textareaRef"
-        v-model="input"
-        :disabled="disabled"
-        class="w-full resize-none bg-transparent px-4 py-3.5 pr-12 text-[15px] text-gray-800
-               placeholder-gray-400 outline-none leading-relaxed
-               disabled:cursor-not-allowed"
-        :placeholder="disabled ? '正在处理中...' : '老师，今天想让我帮您做什么？'"
-        rows="1"
-        @keydown="handleKeydown"
-        @input="autoResize"
-        @focus="showToolbar = true"
-        @blur="showToolbar = false"
-      />
-
-      <!-- Send button -->
-      <button
-        class="absolute right-3 bottom-3 flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-200"
-        :class="canSend
-          ? 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm'
-          : 'bg-gray-100 text-gray-400 cursor-not-allowed'"
-        :disabled="!canSend"
-        @click="send"
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
-        </svg>
+        清除全部
       </button>
     </div>
 
-    <!-- Hint -->
-    <div class="mt-2 text-[11px] text-gray-400 text-center select-none">
-      Enter 发送 · Shift + Enter 换行
+    <div class="flex items-end gap-3">
+      <button 
+        @click="emit('toggleRag')"
+        class="w-10 h-10 rounded-lg flex items-center justify-center transition-all"
+        :class="[
+          props.ragEnabled 
+            ? 'bg-blue-100 text-blue-600' 
+            : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+        ]"
+      >
+        <Database v-if="props.ragEnabled" class="w-5 h-5" />
+        <DatabaseOff v-else class="w-5 h-5" />
+      </button>
+
+      <div class="flex-1 relative">
+        <textarea
+          ref="textareaRef"
+          v-model="message"
+          placeholder="老师，今天想让我帮您做什么？"
+          rows="1"
+          :disabled="props.disabled"
+          @keydown="handleKeyDown"
+          @input="handleInput"
+          class="w-full px-4 py-3 bg-gray-50 rounded-xl border-none resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-gray-900 placeholder-gray-400 transition-all"
+          style="min-height: 48px;"
+        ></textarea>
+      </div>
+
+      <label class="w-10 h-10 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center cursor-pointer transition-colors">
+        <Upload class="w-5 h-5 text-gray-500" />
+        <input 
+          type="file" 
+          multiple 
+          accept=".pdf,.doc,.docx,.txt,.md"
+          class="hidden" 
+          @change="handleFileSelect"
+        />
+      </label>
+
+      <button 
+        @click="sendMessage"
+        :disabled="!message.trim() && files.length === 0 || props.disabled"
+        class="w-10 h-10 rounded-lg flex items-center justify-center transition-all"
+        :class="[
+          (message.trim() || files.length > 0) && !props.disabled
+            ? 'bg-blue-500 text-white hover:bg-blue-600'
+            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+        ]"
+      >
+        <Send class="w-5 h-5" />
+      </button>
+    </div>
+
+    <div class="flex items-center justify-between mt-2 text-xs text-gray-400">
+      <span>{{ props.ragEnabled ? 'RAG已启用' : 'RAG已关闭' }}</span>
+      <span>按 Enter 发送，Shift+Enter 换行</span>
     </div>
   </div>
 </template>

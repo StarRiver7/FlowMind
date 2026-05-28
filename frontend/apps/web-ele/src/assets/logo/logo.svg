@@ -1,42 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" fill="none">
-  <!-- internSU Logo — Minimal AI Enterprise Style -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 36" fill="none">
   <defs>
-    <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#2563EB"/>
-      <stop offset="100%" stop-color="#3B82F6"/>
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="50%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#8B5CF6"/>
     </linearGradient>
-    <linearGradient id="dotGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#60A5FA"/>
-      <stop offset="100%" stop-color="#93C5FD"/>
+    <linearGradient id="dotGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#34D399"/>
     </linearGradient>
   </defs>
-
-  <!-- Icon: Abstract "i" + neural node -->
-  <!-- Outer ring (neural node) -->
-  <circle cx="44" cy="44" r="32" stroke="url(#logoGrad)" stroke-width="2.8" fill="none"/>
-  <circle cx="44" cy="44" r="20" fill="url(#logoGrad)" opacity="0.12"/>
-
-  <!-- Inner "i" letterform -->
-  <rect x="40" y="18" width="8" height="8" rx="2" fill="url(#logoGrad)"/>
-  <rect x="38" y="30" width="12" height="24" rx="3" fill="url(#logoGrad)"/>
-
-  <!-- Connection dots (AI neural feel) -->
-  <circle cx="76" cy="24" r="3.5" fill="url(#dotGrad)"/>
-  <circle cx="84" cy="44" r="3.5" fill="url(#dotGrad)"/>
-  <circle cx="76" cy="64" r="3.5" fill="url(#dotGrad)"/>
-
-  <!-- Connection lines -->
-  <line x1="70" y1="25" x2="62" y2="34" stroke="#93C5FD" stroke-width="1.2" opacity="0.6"/>
-  <line x1="70" y1="44" x2="63" y2="44" stroke="#93C5FD" stroke-width="1.2" opacity="0.6"/>
-  <line x1="70" y1="63" x2="62" y2="54" stroke="#93C5FD" stroke-width="1.2" opacity="0.6"/>
-
-  <!-- Wordmark: internSU -->
-  <text x="106" y="54" font-family="system-ui, -apple-system, sans-serif" font-size="32" font-weight="700" fill="#1E293B" letter-spacing="-0.5">
-    intern<tspan font-weight="600" fill="#2563EB">SU</tspan>
-  </text>
-
-  <!-- Tagline -->
-  <text x="106" y="76" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#94A3B8" letter-spacing="0.5" font-weight="400">
-    企业AI实习生
-  </text>
+  <rect x="0" y="0" width="36" height="36" rx="8" fill="url(#logoGradient)"/>
+  <path d="M10 28V8h6l8 10-8 10h-6z" fill="white"/>
+  <circle cx="28" cy="8" r="3" fill="white" opacity="0.6"/>
+  <circle cx="22" cy="28" r="2" fill="white" opacity="0.4"/>
+  <text x="44" y="26" font-family="Inter, sans-serif" font-size="20" font-weight="600" fill="#1F2937">intern</text>
+  <text x="94" y="26" font-family="Inter, sans-serif" font-size="20" font-weight="700" fill="url(#logoGradient)">SU</text>
+  <circle cx="115" cy="10" r="3" fill="url(#dotGradient)">
+    <animate attributeName="opacity" values="1;0.5;1" dur="2s" repeatCount="indefinite"/>
+  </circle>
 </svg>

@@ -1,209 +1,259 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import type { AgentTrace, CitationSource } from '#/api/core/types';
+import { ref, computed, watch } from 'vue';
+import { ChevronRight, CheckCircle, Loader2, AlertCircle, Circle, Code, Database, GitBranch, FileText, Brain, TrendingUp, Zap } from 'lucide-vue-next';
+
+interface TraceLog {
+  id: string;
+  timestamp: Date;
+  level: 'info' | 'success' | 'warning' | 'error';
+  message: string;
+  node?: string;
+}
+
+interface Node {
+  id: string;
+  name: string;
+  status: 'pending' | 'running' | 'completed' | 'error';
+  icon: typeof ChevronRight;
+  duration?: number;
+}
 
 const props = defineProps<{
-  traces: AgentTrace[];
-  streaming: boolean;
+  isActive?: boolean;
 }>();
 
-// ── LangGraph Node Flow ──
-const flowNodes = [
-  { id: 'start',      label: 'START',       icon: '&#9654;' },
-  { id: 'intent',     label: 'Intent',       icon: '&#9678;' },
-  { id: 'clarify',    label: 'Clarify',      icon: '&#63;' },
-  { id: 'retrieval',  label: 'Retrieval',    icon: '&#8981;' },
-  { id: 'rerank',     label: 'Rerank',       icon: '&#8645;' },
-  { id: 'citation',   label: 'Citation',     icon: '&#8470;' },
-  { id: 'answer',     label: 'Answer',       icon: '&#9998;' },
-  { id: 'end',        label: 'END',          icon: '&#9632;' },
-];
+const nodes = ref<Node[]>([
+  { id: 'start', name: 'START', status: 'completed', icon: Circle, duration: 120 },
+  { id: 'intent', name: 'Intent', status: 'completed', icon: Brain, duration: 450 },
+  { id: 'clarify', name: 'Clarify', status: 'completed', icon: GitBranch, duration: 320 },
+  { id: 'retrieval', name: 'Retrieval', status: 'running', icon: Database, duration: 890 },
+  { id: 'rerank', name: 'Rerank', status: 'pending', icon: TrendingUp },
+  { id: 'citation', name: 'Citation', status: 'pending', icon: FileText },
+  { id: 'answer', name: 'Answer', status: 'pending', icon: CheckCircle },
+  { id: 'end', name: 'END', status: 'pending', icon: Circle },
+]);
 
-// Map trace node names to flow node IDs
-function mapNodeId(nodeName: string): string {
-  const name = nodeName.toLowerCase();
-  if (name.includes('intent')) return 'intent';
-  if (name.includes('clarif')) return 'clarify';
-  if (name.includes('retriev') || name.includes('rag_retriev')) return 'retrieval';
-  if (name.includes('rerank') || name.includes('rag_rerank')) return 'rerank';
-  if (name.includes('citat') || name.includes('rag_citation')) return 'citation';
-  if (name.includes('answer') || name.includes('rag_answer') || name.includes('response')) return 'answer';
-  if (name === 'loading') return 'start';
-  return '';
-}
+const currentNodeId = ref('retrieval');
 
-const activeNodeId = computed(() => {
-  if (props.traces.length === 0) return props.streaming ? 'start' : null;
-  const last = props.traces[props.traces.length - 1];
-  return mapNodeId(last.node);
+const traceLogs = ref<TraceLog[]>([
+  { id: 'log-1', timestamp: new Date(Date.now() - 2000), level: 'info', message: '开始处理用户请求...', node: 'start' },
+  { id: 'log-2', timestamp: new Date(Date.now() - 1800), level: 'success', message: '意图识别完成：用户查询企业制度', node: 'intent' },
+  { id: 'log-3', timestamp: new Date(Date.now() - 1500), level: 'info', message: '检查是否需要澄清...', node: 'clarify' },
+  { id: 'log-4', timestamp: new Date(Date.now() - 1200), level: 'success', message: '意图明确，无需澄清', node: 'clarify' },
+  { id: 'log-5', timestamp: new Date(Date.now() - 800), level: 'info', message: '开始检索知识库...', node: 'retrieval' },
+  { id: 'log-6', timestamp: new Date(Date.now() - 500), level: 'info', message: '查询向量数据库，检索相关文档', node: 'retrieval' },
+  { id: 'log-7', timestamp: new Date(Date.now() - 200), level: 'info', message: '找到 12 个相关文档片段', node: 'retrieval' },
+]);
+
+const tokenUsage = ref({
+  prompt: 245,
+  completion: 89,
+  total: 334,
+  limit: 4096,
 });
 
-const completedNodes = computed(() => {
-  const completed = new Set<string>();
-  for (const t of props.traces) {
-    if (t.status === 'completed' || t.status === 'failed') {
-      completed.add(mapNodeId(t.node));
-    }
+const citations = ref([
+  { id: 'c1', source: '企业员工手册.pdf', page: 15, chunk: 42, similarity: 0.92 },
+  { id: 'c2', source: '公司规章制度.pdf', page: 8, chunk: 17, similarity: 0.87 },
+  { id: 'c3', source: 'HR政策汇编.pdf', page: 23, chunk: 56, similarity: 0.81 },
+]);
+
+const expandedLogs = ref(true);
+const expandedCitations = ref(true);
+
+const progress = computed(() => {
+  const completed = nodes.value.filter(n => n.status === 'completed').length;
+  return (completed / nodes.value.length) * 100;
+});
+
+const tokenProgress = computed(() => {
+  return (tokenUsage.value.total / tokenUsage.value.limit) * 100;
+});
+
+function getNodeStatusClass(status: string) {
+  const classes = {
+    completed: 'bg-green-100 text-green-600',
+    running: 'bg-blue-500 text-white animate-pulse',
+    error: 'bg-red-100 text-red-600',
+    pending: 'bg-gray-100 text-gray-400',
+  };
+  return classes[status as keyof typeof classes] || classes.pending;
+}
+
+function getLogLevelClass(level: string) {
+  const classes = {
+    info: 'text-blue-600',
+    success: 'text-green-600',
+    warning: 'text-yellow-600',
+    error: 'text-red-600',
+  };
+  return classes[level as keyof typeof classes] || classes.info;
+}
+
+function formatTime(date: Date) {
+  return date.toLocaleTimeString('zh-CN', { hour12: false });
+}
+
+watch(() => props.isActive, (active) => {
+  if (active) {
+    simulateProcess();
   }
-  return completed;
 });
 
-function nodeStatus(nodeId: string) {
-  if (completedNodes.value.has(nodeId)) return 'completed';
-  if (nodeId === activeNodeId.value && props.streaming) return 'running';
-  return 'pending';
+function simulateProcess() {
+  setTimeout(() => {
+    const idx = nodes.value.findIndex(n => n.status === 'running');
+    if (idx >= 0 && idx < nodes.value.length - 1) {
+      nodes.value[idx].status = 'completed';
+      nodes.value[idx + 1].status = 'running';
+      currentNodeId.value = nodes.value[idx + 1].id;
+      
+      traceLogs.value.push({
+        id: `log-${Date.now()}`,
+        timestamp: new Date(),
+        level: 'success',
+        message: `${nodes.value[idx].name} 节点处理完成`,
+        node: nodes.value[idx].id,
+      });
+
+      if (nodes.value[idx + 1].id === 'retrieval') {
+        citations.value = [
+          { id: 'c1', source: '企业员工手册.pdf', page: 15, chunk: 42, similarity: 0.92 },
+          { id: 'c2', source: '公司规章制度.pdf', page: 8, chunk: 17, similarity: 0.87 },
+        ];
+      }
+    }
+  }, 2000);
 }
-
-// ── Trace Collapse ──
-const maxVisibleTraces = 6;
-const showAllTraces = ref(false);
-const visibleTraces = computed(() => {
-  if (showAllTraces.value) return props.traces;
-  const total = props.traces.length;
-  if (total <= maxVisibleTraces) return props.traces;
-  // Show latest messages, hide older
-  return props.traces.slice(total - maxVisibleTraces);
-});
-const hiddenCount = computed(() => Math.max(0, props.traces.length - maxVisibleTraces));
 </script>
 
 <template>
-  <div class="h-full flex flex-col">
-    <!-- Header -->
-    <div class="shrink-0 px-4 py-3 border-b border-gray-100">
-      <div class="flex items-center gap-2 text-sm font-semibold text-gray-700">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-        </svg>
-        工作过程
-        <span v-if="streaming" class="ml-auto flex items-center gap-1 text-[10px] font-normal text-blue-500">
-          <span class="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-          运行中
-        </span>
+  <div class="h-full flex flex-col bg-gray-50">
+    <div class="p-4 border-b border-gray-200">
+      <h3 class="font-semibold text-gray-900">Agent 工作流</h3>
+      <div class="mt-3">
+        <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
+          <span>处理进度</span>
+          <span>{{ Math.round(progress) }}%</span>
+        </div>
+        <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div 
+            class="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500"
+            :style="{ width: `${progress}%` }"
+          ></div>
+        </div>
       </div>
     </div>
 
-    <!-- LangGraph Node Flow -->
-    <div class="shrink-0 px-4 py-3 border-b border-gray-100">
-      <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2.5">
-        LangGraph 节点流
+    <div class="p-4 border-b border-gray-200">
+      <div class="flex items-center gap-2">
+        <div 
+          v-for="(node, index) in nodes" 
+          :key="node.id"
+          class="flex items-center"
+        >
+          <div 
+            class="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-medium transition-all"
+            :class="[getNodeStatusClass(node.status)]"
+          >
+            <component :is="node.icon" class="w-4 h-4" />
+          </div>
+          <ChevronRight 
+            v-if="index < nodes.length - 1" 
+            class="w-4 h-4 text-gray-300 mx-1" 
+          />
+        </div>
       </div>
-      <div class="flex items-center gap-1 justify-between">
-        <template v-for="(node, i) in flowNodes" :key="node.id">
-          <div class="flex flex-col items-center gap-1" :style="{ width: `${100/flowNodes.length}%` }">
-            <div
-              class="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-300"
-              :class="{
-                'bg-blue-500 text-white shadow-sm scale-110': nodeStatus(node.id) === 'running',
-                'bg-green-500 text-white': nodeStatus(node.id) === 'completed',
-                'bg-red-400 text-white': nodeStatus(node.id) === 'failed',
-                'bg-gray-100 text-gray-400': nodeStatus(node.id) === 'pending',
-              }"
-              v-html="node.icon"
-            />
-            <div
-              class="text-[9px] font-medium text-center leading-tight"
-              :class="{
-                'text-blue-600': nodeStatus(node.id) === 'running',
-                'text-green-600': nodeStatus(node.id) === 'completed',
-                'text-gray-400': nodeStatus(node.id) === 'pending',
-              }"
-            >
-              {{ node.label }}
+    </div>
+
+    <div class="flex-1 overflow-y-auto">
+      <div class="border-b border-gray-200">
+        <button 
+          @click="expandedLogs = !expandedLogs"
+          class="w-full p-4 flex items-center justify-between hover:bg-gray-100 transition-colors"
+        >
+          <div class="flex items-center gap-2">
+            <Code class="w-4 h-4 text-gray-500" />
+            <span class="font-medium text-gray-700">Trace 日志</span>
+          </div>
+          <ChevronRight 
+            class="w-4 h-4 text-gray-400 transition-transform"
+            :class="{ 'rotate-90': expandedLogs }"
+          />
+        </button>
+        <div v-if="expandedLogs" class="px-4 pb-4 space-y-2 max-h-[200px] overflow-y-auto">
+          <div 
+            v-for="log in traceLogs" 
+            :key="log.id"
+            class="flex items-start gap-2 text-sm"
+          >
+            <span class="text-xs text-gray-400 flex-shrink-0">{{ formatTime(log.timestamp) }}</span>
+            <span :class="getLogLevelClass(log.level)">{{ log.message }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="border-b border-gray-200">
+        <button 
+          @click="expandedCitations = !expandedCitations"
+          class="w-full p-4 flex items-center justify-between hover:bg-gray-100 transition-colors"
+        >
+          <div class="flex items-center gap-2">
+            <Database class="w-4 h-4 text-gray-500" />
+            <span class="font-medium text-gray-700">引用来源</span>
+            <span class="px-2 py-0.5 bg-blue-100 text-blue-600 rounded-full text-xs">
+              {{ citations.length }}
+            </span>
+          </div>
+          <ChevronRight 
+            class="w-4 h-4 text-gray-400 transition-transform"
+            :class="{ 'rotate-90': expandedCitations }"
+          />
+        </button>
+        <div v-if="expandedCitations" class="px-4 pb-4 space-y-2">
+          <div 
+            v-for="citation in citations" 
+            :key="citation.id"
+            class="p-2 bg-white rounded-lg text-sm"
+          >
+            <div class="font-medium text-gray-900">{{ citation.source }}</div>
+            <div class="flex items-center gap-3 mt-1 text-xs text-gray-500">
+              <span>页码: {{ citation.page }}</span>
+              <span>Chunk: {{ citation.chunk }}</span>
+              <span class="text-blue-500">相似度: {{ (citation.similarity * 100).toFixed(0) }}%</span>
             </div>
           </div>
-          <!-- Connector -->
-          <div
-            v-if="i < flowNodes.length - 1"
-            class="h-0.5 flex-1 min-w-[8px] rounded-full transition-colors duration-300"
-            :class="i < completedNodes.value.size ? 'bg-green-300' : 'bg-gray-200'"
-          />
-        </template>
-      </div>
-    </div>
-
-    <!-- Trace Log -->
-    <div class="flex-1 overflow-y-auto isu-scrollbar px-4 py-3">
-      <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2.5">
-        Trace 日志
-        <span v-if="traces.length > 0" class="ml-1 font-normal">({{ traces.length }})</span>
+        </div>
       </div>
 
-      <!-- Collapsed older traces -->
-      <button
-        v-if="hiddenCount > 0 && !showAllTraces"
-        class="w-full text-center text-[11px] text-gray-400 hover:text-blue-500 py-1.5 mb-2 rounded-lg hover:bg-blue-50/50 transition-all"
-        @click="showAllTraces = true"
-      >
-        展开 {{ hiddenCount }} 条历史日志
-      </button>
-
-      <!-- Trace items -->
-      <div class="space-y-1.5">
-        <div
-          v-for="(trace, i) in visibleTraces"
-          :key="i"
-          class="rounded-lg px-3 py-2 text-xs transition-all animate-isu-fade-in"
-          :class="{
-            'bg-blue-50 border border-blue-100': trace.status === 'running',
-            'bg-white border border-gray-100': trace.status === 'completed',
-            'bg-red-50 border border-red-100': trace.status === 'failed',
-          }"
-        >
-          <div class="flex items-center gap-2 mb-0.5">
-            <span
-              class="w-1.5 h-1.5 rounded-full"
-              :class="{
-                'bg-blue-400 animate-pulse': trace.status === 'running',
-                'bg-green-400': trace.status === 'completed',
-                'bg-red-400': trace.status === 'failed',
-              }"
-            />
-            <span class="font-semibold"
-                  :class="{
-                    'text-blue-700': trace.status === 'running',
-                    'text-gray-700': trace.status === 'completed',
-                    'text-red-700': trace.status === 'failed',
-                  }">
-              {{ trace.node }}
-            </span>
-            <span class="ml-auto text-[10px] text-gray-400">
-              {{ new Date(trace.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) }}
-            </span>
+      <div class="p-4">
+        <div class="flex items-center gap-2 mb-3">
+          <Zap class="w-4 h-4 text-yellow-500" />
+          <span class="font-medium text-gray-700">Token 统计</span>
+        </div>
+        <div class="space-y-3">
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-gray-500">Prompt</span>
+            <span class="font-medium text-gray-900">{{ tokenUsage.prompt }}</span>
           </div>
-          <div class="text-gray-500 leading-relaxed">{{ trace.message }}</div>
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-gray-500">Completion</span>
+            <span class="font-medium text-gray-900">{{ tokenUsage.completion }}</span>
+          </div>
+          <div class="pt-2 border-t border-gray-200">
+            <div class="flex items-center justify-between text-sm mb-1">
+              <span class="text-gray-700 font-medium">Total</span>
+              <span class="font-medium text-gray-900">{{ tokenUsage.total }} / {{ tokenUsage.limit }}</span>
+            </div>
+            <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+              <div 
+                class="h-full bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full transition-all"
+                :style="{ width: `${tokenProgress}%` }"
+              ></div>
+            </div>
+          </div>
         </div>
       </div>
-
-      <!-- Empty -->
-      <div
-        v-if="traces.length === 0 && !streaming"
-        class="flex flex-col items-center justify-center py-8 text-center"
-      >
-        <div class="text-xs text-gray-400">暂无工作日志</div>
-        <div class="mt-1 text-[11px] text-gray-300">发送消息后将在此展示 Agent 工作过程</div>
-      </div>
-
-      <!-- Waiting -->
-      <div
-        v-if="traces.length === 0 && streaming"
-        class="flex flex-col items-center justify-center py-8 text-center"
-      >
-        <div class="flex gap-1">
-          <span class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style="animation-delay: 0ms" />
-          <span class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style="animation-delay: 150ms" />
-          <span class="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style="animation-delay: 300ms" />
-        </div>
-        <div class="mt-2 text-xs text-gray-400">Agent 正在思考...</div>
-      </div>
-
-      <button
-        v-if="traces.length > maxVisibleTraces && showAllTraces"
-        class="w-full text-center text-[11px] text-gray-400 hover:text-blue-500 py-1.5 mt-1 rounded-lg hover:bg-blue-50/50 transition-all"
-        @click="showAllTraces = false"
-      >
-        收起历史日志
-      </button>
     </div>
   </div>
 </template>

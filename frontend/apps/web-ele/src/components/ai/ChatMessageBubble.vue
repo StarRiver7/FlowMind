@@ -1,92 +1,163 @@
-<script setup lang="ts">
-import { computed } from 'vue';
-import MarkdownView from '#/components/markdown/MarkdownView.vue';
-import type { ChatMessageUI } from '#/store/ai-chat';
-
+<script setup lang="ts">import { ref, computed, watch, nextTick } from 'vue';
+import { User, Bot, FileText, Database, Code, ExternalLink, ChevronDown, ChevronUp } from 'lucide-vue-next';
+import { marked } from 'marked';
+import hljs from 'highlight.js';
+interface Message {
+ id: string;
+ role: 'user' | 'assistant';
+ content: string;
+ isStreaming?: boolean;
+ citations?: Array<{
+ id: string;
+ source: string;
+ page?: number;
+ chunkIndex?: number;
+ similarity?: number;
+ snippet: string;
+ }>;
+ toolCall?: {
+ name: string;
+ parameters: Record<string, unknown>;
+ result?: string;
+ };
+ thinking?: boolean;
+ timestamp?: Date;
+}
 const props = defineProps<{
-  message: ChatMessageUI;
-  streaming?: boolean;
+ message: Message;
 }>();
-
-const isUser = computed(() => props.message.role === 'user');
-const hasSources = computed(() => (props.message.sources?.length ?? 0) > 0);
-const hasTrace = computed(() => (props.message.trace?.length ?? 0) > 0);
+const contentRef = ref<HTMLElement | null>(null);
+const expanded = ref(false);
+const renderedContent = computed(() => {
+ let content = props.message.content;
+ content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, (_match, lang, code) => {
+ const language = lang && hljs.getLanguage(lang) ? lang : 'plaintext';
+ const highlighted = hljs.highlight(code.trim(), { language }).value;
+ return `<pre class="bg-gray-900 rounded-lg p-4 overflow-x-auto"><code class="hljs language-${language}">${highlighted}</code></pre>`;
+ });
+ return marked(content);
+});
+const shouldExpand = computed(() => {
+ if (!contentRef.value)
+ return false;
+ return contentRef.value.scrollHeight > 400;
+});
+const toggleExpand = () => {
+ expanded.value = !expanded.value;
+};
+watch(() => props.message.content, async () => {
+ await nextTick();
+});
 </script>
 
 <template>
-  <div
-    class="mb-5 animate-isu-fade-in"
-    :class="isUser ? 'flex justify-end' : 'flex gap-3'"
+  <div 
+    class="flex gap-3 mb-6"
+    :class="[message.role === 'user' ? 'flex-row-reverse' : '']"
   >
-    <!-- Avatar (assistant only) -->
-    <div v-if="!isUser" class="shrink-0 mt-1">
-      <div class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-500 text-white text-[13px] font-semibold">
-        SU
-      </div>
+    <div 
+      class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+      :class="[
+        message.role === 'user' 
+          ? 'bg-gradient-to-br from-gray-700 to-gray-800' 
+          : 'bg-gradient-to-br from-blue-500 to-indigo-500'
+      ]"
+    >
+      <User v-if="message.role === 'user'" class="w-5 h-5 text-white" />
+      <Bot v-else class="w-5 h-5 text-white" />
     </div>
 
-    <div :class="isUser ? 'max-w-[75%]' : 'max-w-[85%] flex-1'">
-      <!-- Bubble -->
-      <div :class="isUser ? 'isu-bubble-user px-5 py-3' : 'isu-bubble-assistant px-5 py-3'">
-        <!-- Role label -->
-        <div v-if="!isUser" class="mb-1.5 text-[11px] font-semibold text-blue-500 tracking-wide uppercase">
-          internSU
-        </div>
-
-        <!-- Content -->
-        <div v-if="isUser" class="text-[15px] text-gray-800 leading-relaxed whitespace-pre-wrap">
-          {{ message.content }}
-        </div>
-        <MarkdownView v-else :content="message.content" />
-
-        <!-- Streaming cursor -->
-        <span
-          v-if="streaming"
-          class="inline-block w-1.5 h-5 bg-blue-500 animate-pulse align-text-bottom ml-0.5 rounded-sm"
-        />
-      </div>
-
-      <!-- Sources inline (on hover) -->
-      <div
-        v-if="hasSources && !isUser"
-        class="mt-2 flex flex-wrap gap-1.5"
+    <div class="max-w-[70%]" :class="[message.role === 'user' ? 'text-right' : '']">
+      <div 
+        class="inline-block px-4 py-3 rounded-2xl"
+        :class="[
+          message.role === 'user'
+            ? 'bg-blue-500 text-white rounded-tr-md'
+            : 'bg-gray-100 text-gray-900 rounded-tl-md'
+        ]"
       >
-        <span
-          v-for="(src, i) in message.sources"
-          :key="i"
-          class="inline-flex items-center gap-1 rounded-md bg-gray-50 border border-gray-100 px-2.5 py-1
-                 text-[11px] text-gray-500 cursor-pointer hover:border-blue-200 hover:bg-blue-50/50 transition-all"
-          :title="src.excerpt || src.document_name"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-          </svg>
-          <span class="max-w-[140px] truncate">{{ src.document_name }}</span>
-          <span v-if="src.page_number" class="text-gray-400">p.{{ src.page_number }}</span>
-          <span v-if="src.relevance_score" class="text-gray-400 ml-0.5">{{ (src.relevance_score * 100).toFixed(0) }}%</span>
-        </span>
+        <div v-if="message.thinking" class="flex items-center gap-2">
+          <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+          <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style="animation-delay: 0.1s"></div>
+          <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style="animation-delay: 0.2s"></div>
+          <span class="text-sm">正在思考...</span>
+        </div>
+
+        <div 
+          v-else
+          ref="contentRef"
+          class="text-sm leading-relaxed"
+          :class="[expanded ? '' : 'max-h-[400px] overflow-hidden']"
+          v-html="renderedContent"
+        ></div>
+
+        <div v-if="message.isStreaming && !message.thinking" class="flex items-center gap-2 mt-2">
+          <div class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+        </div>
       </div>
 
-      <!-- Agent trace summary (collapsed) -->
-      <details v-if="hasTrace && !isUser" class="mt-2 group">
-        <summary class="text-[11px] text-gray-400 cursor-pointer hover:text-gray-500 select-none">
-          {{ message.trace!.length }} 步工作过程
-        </summary>
-        <div class="mt-1.5 space-y-1 pl-1 border-l-2 border-gray-100">
-          <div
-            v-for="(step, i) in message.trace"
-            :key="i"
-            class="flex items-center gap-2 text-[11px]"
-            :class="step.status === 'completed' ? 'text-gray-400' : step.status === 'failed' ? 'text-red-400' : 'text-blue-500'"
+      <div v-if="message.toolCall" class="mt-3 p-3 bg-gray-50 rounded-xl text-left">
+        <div class="flex items-center gap-2 mb-2">
+          <Code class="w-4 h-4 text-gray-500" />
+          <span class="text-sm font-medium text-gray-700">工具调用: {{ message.toolCall.name }}</span>
+        </div>
+        <div class="text-xs text-gray-500 mb-2">参数:</div>
+        <pre class="text-xs bg-gray-100 rounded-lg p-2 overflow-x-auto">{{ JSON.stringify(message.toolCall.parameters, null, 2) }}</pre>
+        <div v-if="message.toolCall.result" class="mt-2">
+          <div class="text-xs text-gray-500 mb-1">结果:</div>
+          <p class="text-sm text-gray-700">{{ message.toolCall.result }}</p>
+        </div>
+      </div>
+
+      <div v-if="message.citations && message.citations.length > 0" class="mt-3 text-left">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <Database class="w-4 h-4 text-blue-500" />
+            <span class="text-sm font-medium text-gray-700">引用来源</span>
+          </div>
+          <button 
+            v-if="message.citations.length > 3"
+            @click="toggleExpand"
+            class="text-xs text-blue-500 hover:text-blue-600 flex items-center gap-1"
           >
-            <span v-if="step.status === 'completed'" class="text-green-400">&#10003;</span>
-            <span v-else-if="step.status === 'failed'" class="text-red-400">&#10007;</span>
-            <span v-else class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-            <span class="text-gray-500">{{ step.node }}</span>
-            <span class="text-gray-400 truncate">{{ step.message }}</span>
+            <component :is="expanded ? ChevronUp : ChevronDown" class="w-3 h-3" />
+            {{ expanded ? '收起' : `查看全部(${message.citations.length})` }}
+          </button>
+        </div>
+        <div 
+          class="space-y-2"
+          :class="[expanded ? '' : 'max-h-[200px] overflow-hidden']"
+        >
+          <div 
+            v-for="(citation, index) in (expanded ? message.citations : message.citations.slice(0, 3))" 
+            :key="citation.id"
+            class="flex items-start gap-2 p-2 bg-blue-50 rounded-lg"
+          >
+            <span class="w-5 h-5 rounded-full bg-blue-500 text-white text-xs flex items-center justify-center flex-shrink-0">{{ index + 1 }}</span>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <FileText class="w-3.5 h-3.5 text-blue-500" />
+                <span class="text-sm font-medium text-blue-700 truncate">{{ citation.source }}</span>
+              </div>
+              <div class="flex items-center gap-3 mt-1 text-xs text-blue-600">
+                <span v-if="citation.page">页码: {{ citation.page }}</span>
+                <span v-if="citation.chunkIndex">Chunk: {{ citation.chunkIndex }}</span>
+                <span v-if="citation.similarity">相似度: {{ (citation.similarity * 100).toFixed(1) }}%</span>
+              </div>
+              <p class="text-xs text-gray-600 mt-1 line-clamp-2">{{ citation.snippet }}</p>
+            </div>
+            <ExternalLink class="w-4 h-4 text-gray-400 flex-shrink-0" />
           </div>
         </div>
-      </details>
+      </div>
+
+      <button 
+        v-if="shouldExpand && !message.citations?.length"
+        @click="toggleExpand"
+        class="mt-2 text-xs text-blue-500 hover:text-blue-600"
+      >
+        {{ expanded ? '收起' : '展开全文' }}
+      </button>
     </div>
   </div>
 </template>

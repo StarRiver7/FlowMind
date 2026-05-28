@@ -1,334 +1,280 @@
 <script setup lang="ts">
-import { ref, nextTick, onMounted, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import ChatInput from './components/ChatInput.vue';
-import ChatMessageBubble from './components/ChatMessageBubble.vue';
-import AgentTracePanel from './components/AgentTracePanel.vue';
-import SourcePanel from './components/SourcePanel.vue';
-import { chatStreamSSE, listConversations, createConversation, getMessages } from '#/api/core/chat';
-import type { ChatMessage, AgentTrace, CitationSource } from '#/api/core/types';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { useRouter } from 'vue-router';
+import { Settings, Maximize2, Minimize2 } from 'lucide-vue-next';
+import ConversationSidebar from '#/components/ai/ConversationSidebar.vue';
+import ChatMessageBubble from '#/components/ai/ChatMessageBubble.vue';
+import ChatInput from '#/components/ai/ChatInput.vue';
+import AgentPanel from '#/components/trace/AgentPanel.vue';
 
-const route = useRoute();
+interface Conversation {
+  id: string;
+  title: string;
+  lastMessage: string;
+  timestamp: Date;
+  unread: number;
+}
+
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  sources?: Array<{
+    id: string;
+    documentName: string;
+    pageNumber?: number;
+    chunkIndex: number;
+    similarity: number;
+    content: string;
+    kbName: string;
+  }>;
+  isStream?: boolean;
+  thinking?: boolean;
+}
+
+interface TraceLog {
+  id: string;
+  timestamp: Date;
+  level: 'info' | 'warning' | 'error' | 'success';
+  message: string;
+  node?: string;
+}
+
 const router = useRouter();
+const messagesContainerRef = ref<HTMLElement | null>(null);
+const isPanelExpanded = ref(true);
 
-// ── State ──
-const messages = ref<ChatMessage[]>([]);
-const isStreaming = ref(false);
-const currentTrace = ref<AgentTrace[]>([]);
-const currentSources = ref<CitationSource[]>([]);
-const currentAnswer = ref('');
-const convId = ref(route.query.conv as string || '');
-const sessions = ref<{ id: string; title: string; updatedAt: string }[]>([]);
-const showSessions = ref(true);
-const showAgentPanel = ref(true);
+const currentConversationId = ref('conv-1');
+const conversations = ref<Conversation[]>([
+  { id: 'conv-1', title: '企业制度查询', lastMessage: '帮我查一下员工考勤制度', timestamp: new Date(), unread: 0 },
+  { id: 'conv-2', title: '员工数据分析', lastMessage: '本月新入职员工有多少人', timestamp: new Date(Date.now() - 3600000), unread: 2 },
+  { id: 'conv-3', title: '知识库上传', lastMessage: '上传了新的员工手册', timestamp: new Date(Date.now() - 7200000), unread: 0 },
+]);
 
-// ── Lifecycle ──
-onMounted(async () => {
-  await loadSessions();
-  if (convId.value) await loadMessages(convId.value);
+const messages = ref<Message[]>([
+  {
+    id: 'msg-1',
+    role: 'user',
+    content: '帮我查一下企业的员工考勤制度',
+  },
+  {
+    id: 'msg-2',
+    role: 'assistant',
+    content: '收到老师～我正在搜索企业知识库，帮您查找相关的考勤制度信息。',
+    sources: [
+      {
+        id: 'src-1',
+        documentName: '企业员工手册.pdf',
+        pageNumber: 15,
+        chunkIndex: 42,
+        similarity: 0.92,
+        content: '员工考勤制度规定：工作日为周一至周五，正常工作时间为上午9:00至下午6:00，中午12:00-13:30为休息时间。',
+        kbName: '公司制度库',
+      },
+    ],
+  },
+  {
+    id: 'msg-3',
+    role: 'assistant',
+    content: '根据企业知识库中的《企业员工手册》，为您整理了以下考勤制度：\n\n**工作时间**\n- 工作日：周一至周五\n- 工作时段：上午9:00 - 下午6:00\n- 午休时间：12:00 - 13:30\n\n**考勤要求**\n- 员工需每日打卡上下班\n- 迟到30分钟以内视为迟到，超过30分钟视为旷工\n- 每月允许3次迟到，超过次数将影响绩效考核\n\n**请假制度**\n- 事假需提前1天申请\n- 病假需提供医院证明\n- 年假根据工龄计算：\n  - 1-3年：5天/年\n  - 3-5年：10天/年\n  - 5年以上：15天/年',
+    sources: [
+      {
+        id: 'src-1',
+        documentName: '企业员工手册.pdf',
+        pageNumber: 15,
+        chunkIndex: 42,
+        similarity: 0.92,
+        content: '员工考勤制度规定：工作日为周一至周五，正常工作时间为上午9:00至下午6:00，中午12:00-13:30为休息时间。',
+        kbName: '公司制度库',
+      },
+      {
+        id: 'src-2',
+        documentName: '企业员工手册.pdf',
+        pageNumber: 16,
+        chunkIndex: 45,
+        similarity: 0.88,
+        content: '考勤管理：员工每日需通过考勤系统打卡，迟到30分钟以内记迟到一次，超过30分钟按旷工处理。',
+        kbName: '公司制度库',
+      },
+    ],
+  },
+]);
+
+const currentNode = ref('answer');
+const nodeStatuses = ref<Record<string, 'pending' | 'running' | 'completed' | 'error'>>({
+  start: 'completed',
+  intent: 'completed',
+  clarify: 'completed',
+  retrieval: 'completed',
+  rerank: 'completed',
+  citation: 'completed',
+  answer: 'completed',
+  end: 'pending',
 });
 
-// ── Session Management ──
-async function loadSessions() {
-  try {
-    const res = await listConversations('1');
-    sessions.value = (res.conversations || []).map((c: any) => ({
-      id: c.conversation_id || c.id,
-      title: c.title || '新对话',
-      updatedAt: c.updated_at || c.create_time || '',
-    }));
-  } catch { /* graceful */ }
+const traceLogs = ref<TraceLog[]>([
+  { id: 'log-1', timestamp: new Date(Date.now() - 5000), level: 'info', message: '开始处理用户请求', node: 'START' },
+  { id: 'log-2', timestamp: new Date(Date.now() - 4500), level: 'info', message: '识别用户意图：查询考勤制度', node: 'Intent' },
+  { id: 'log-3', timestamp: new Date(Date.now() - 4000), level: 'info', message: '无需澄清，直接进入检索', node: 'Clarify' },
+  { id: 'log-4', timestamp: new Date(Date.now() - 3500), level: 'info', message: '检索知识库，找到5个相关文档', node: 'Retrieval' },
+  { id: 'log-5', timestamp: new Date(Date.now() - 3000), level: 'info', message: 'Rerank完成，筛选出2个最相关文档', node: 'Rerank' },
+  { id: 'log-6', timestamp: new Date(Date.now() - 2500), level: 'info', message: '生成引用来源', node: 'Citation' },
+  { id: 'log-7', timestamp: new Date(Date.now() - 1000), level: 'success', message: '回答生成完成', node: 'Answer' },
+]);
+
+const ragEnabled = ref(true);
+const isLoading = ref(false);
+const tokenCount = ref(1256);
+const elapsedTime = ref(5000);
+
+function selectConversation(id: string) {
+  currentConversationId.value = id;
 }
 
-async function loadMessages(id: string) {
-  try {
-    const res = await getMessages(id);
-    messages.value = (res.messages || []).map((m: any) => ({
-      role: m.role,
-      content: m.content,
-      sources: m.sources || [],
-      trace: m.trace || [],
-    }));
-  } catch { /* graceful */ }
-}
-
-async function newConversation() {
+function createConversation() {
+  const newId = `conv-${Date.now()}`;
+  conversations.value.unshift({
+    id: newId,
+    title: '新对话',
+    lastMessage: '',
+    timestamp: new Date(),
+    unread: 0,
+  });
+  currentConversationId.value = newId;
   messages.value = [];
-  currentSources.value = [];
-  currentTrace.value = [];
-  currentAnswer.value = '';
-  convId.value = '';
-  router.replace({ query: {} });
 }
 
-async function selectSession(session: { id: string }) {
-  convId.value = session.id;
-  router.replace({ query: { conv: session.id } });
-  await loadMessages(session.id);
+function deleteConversation(id: string) {
+  conversations.value = conversations.value.filter((c) => c.id !== id);
+  if (currentConversationId.value === id) {
+    currentConversationId.value = conversations.value[0]?.id || '';
+  }
 }
 
-// ── Send Message ──
 async function sendMessage(content: string) {
-  if (!content.trim() || isStreaming.value) return;
+  isLoading.value = true;
+  
+  messages.value.push({
+    id: `msg-${Date.now()}`,
+    role: 'user',
+    content,
+  });
 
-  // Add user message
-  messages.value.push({ role: 'user', content });
+  await simulateResponse();
+  
+  isLoading.value = false;
+}
 
-  // Create conversation if needed
-  if (!convId.value) {
-    try {
-      const res = await createConversation('1', content.slice(0, 30));
-      convId.value = res.conversation_id;
-      router.replace({ query: { conv: convId.value } });
-      await loadSessions();
-    } catch { /* use temp id */ }
-  }
+async function simulateResponse() {
+  const thinkingMsg: Message = {
+    id: `msg-${Date.now()}`,
+    role: 'assistant',
+    content: '',
+    thinking: true,
+  };
+  messages.value.push(thinkingMsg);
 
-  // Start streaming
-  isStreaming.value = true;
-  currentAnswer.value = '';
-  currentSources.value = [];
-  currentTrace.value = [];
+  await new Promise((resolve) => setTimeout(resolve, 2000));
 
-  try {
-    const response = await chatStreamSSE({
-      user_id: '1',
-      conversation_id: convId.value,
-      message: content,
-      model: 'deepseek-chat',
-    });
-
-    if (!response.ok || !response.body) throw new Error('Stream failed');
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6).trim();
-          if (!data) continue;
-
-          try {
-            const event = JSON.parse(data);
-            handleSSEEvent(event);
-          } catch { /* skip malformed */ }
-        }
-      }
-    }
-  } catch (err: any) {
-    currentAnswer.value = currentAnswer.value || '收到老师～连接暂时中断，请稍后再试～';
-  } finally {
-    // Finalize assistant message
-    if (currentAnswer.value) {
-      messages.value.push({
-        role: 'assistant',
-        content: currentAnswer.value,
-        sources: [...currentSources.value],
-        trace: [...currentTrace.value],
-      });
-    }
-    isStreaming.value = false;
-    currentAnswer.value = '';
-    await loadSessions();
+  const thinkingIndex = messages.value.findIndex((m) => m.id === thinkingMsg.id);
+  if (thinkingIndex !== -1) {
+    messages.value[thinkingIndex] = {
+      id: thinkingMsg.id,
+      role: 'assistant',
+      content: '好的老师，我来帮您分析这个问题...\n\n根据分析，您的问题涉及到企业的日常运营管理。以下是相关信息：\n\n**分析结果**\n\n1. **核心要点**：您提出的问题涉及到企业管理的多个方面\n2. **建议方向**：建议从以下几个维度考虑\n\n如果您需要更详细的信息，请告诉我！',
+      sources: [
+        {
+          id: 'src-sim',
+          documentName: '企业管理指南.pdf',
+          chunkIndex: 15,
+          similarity: 0.85,
+          content: '企业管理涉及多个维度，包括人力资源、财务管理、运营管理等。',
+          kbName: '企业知识库',
+        },
+      ],
+    };
   }
 }
 
-function handleSSEEvent(event: any) {
-  const type = event.type || event.event || '';
+function toggleRag() {
+  ragEnabled.value = !ragEnabled.value;
+}
 
-  switch (type) {
-    case 'token':
-    case 'delta':
-      currentAnswer.value += event.content || event.data || '';
-      break;
-    case 'trace':
-    case 'step':
-      currentTrace.value.push({
-        node: event.node || event.step || '',
-        message: event.message || '',
-        status: event.status || 'running',
-        timestamp: Date.now(),
-      });
-      break;
-    case 'source':
-    case 'citation':
-      if (event.sources) {
-        currentSources.value = event.sources;
-      } else if (event.document_name) {
-        currentSources.value.push({
-          document_name: event.document_name,
-          page_number: event.page_number,
-          relevance_score: event.score || event.relevance_score,
-          knowledge_base: event.knowledge_base || '',
-          excerpt: event.excerpt || '',
-        });
-      }
-      break;
-    case 'done':
-    case 'complete':
-      // Stream complete
-      break;
-    default:
-      // Try to extract content from any event
-      if (event.content && !currentAnswer.value) {
-        currentAnswer.value = event.content;
-      }
+function scrollToBottom() {
+  if (messagesContainerRef.value) {
+    messagesContainerRef.value.scrollTop = messagesContainerRef.value.scrollHeight;
   }
 }
+
+onMounted(() => {
+  scrollToBottom();
+});
 </script>
 
 <template>
-  <div class="flex h-full">
-    <!-- Left: Session sidebar -->
-    <aside
-      v-show="showSessions"
-      class="w-64 shrink-0 border-r border-gray-200/80 bg-white flex flex-col"
-    >
-      <div class="p-3">
-        <button
-          class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm text-gray-600
-                 hover:border-blue-200 hover:bg-blue-50/50 transition-all duration-150 flex items-center gap-2"
-          @click="newConversation"
-        >
-          <span class="text-lg">+</span>
-          <span>新建对话</span>
-        </button>
-      </div>
-
-      <div class="flex-1 overflow-y-auto px-2">
-        <div
-          v-for="session in sessions"
-          :key="session.id"
-          class="mb-0.5 cursor-pointer rounded-lg px-3 py-2 text-sm transition-all duration-150"
-          :class="convId === session.id
-            ? 'bg-blue-50 text-blue-700 font-medium'
-            : 'text-gray-600 hover:bg-gray-50'"
-          @click="selectSession(session)"
-        >
-          <div class="truncate">{{ session.title }}</div>
-          <div class="mt-0.5 text-[11px] text-gray-400">
-            {{ session.updatedAt?.slice(0, 10) }}
-          </div>
-        </div>
-
-        <div
-          v-if="sessions.length === 0"
-          class="p-4 text-center text-xs text-gray-400"
-        >
-          暂无历史会话
-        </div>
-      </div>
-    </aside>
-
-    <!-- Center: Chat area -->
-    <div class="flex flex-1 flex-col min-w-0">
-      <!-- Toggle sidebar button -->
-      <button
-        class="absolute left-0 top-1/2 z-10 -translate-y-1/2 rounded-r-lg border border-l-0
-               border-gray-200 bg-white px-1 py-4 text-gray-400 hover:text-gray-600 transition-colors"
-        :class="{ 'left-64': showSessions }"
-        @click="showSessions = !showSessions"
-      >
-        {{ showSessions ? '◂' : '▸' }}
-      </button>
-
-      <!-- Messages -->
-      <div class="flex-1 overflow-y-auto px-6 py-4" ref="messagesContainer">
-        <!-- Welcome when empty -->
-        <div
-          v-if="messages.length === 0 && !isStreaming"
-          class="flex flex-col items-center justify-center h-full text-center"
-        >
-          <div class="mb-4 text-4xl">👋</div>
-          <h1 class="mb-2 text-xl font-semibold text-gray-800">
-            老师，今天想让我帮您做什么？
-          </h1>
-          <p class="mb-8 text-sm text-gray-500">
-            我是小SU，您的AI实习生。可以帮您查询制度、分析数据、整理知识。
-          </p>
-
-          <!-- Quick actions -->
-          <div class="grid grid-cols-2 gap-3 max-w-md">
-            <button
-              v-for="action in quickActions"
-              :key="action.label"
-              class="rounded-xl border border-gray-200 bg-white px-4 py-3 text-left
-                     hover:border-blue-200 hover:bg-blue-50/30 transition-all duration-150"
-              @click="sendMessage(action.prompt)"
-            >
-              <div class="text-sm font-medium text-gray-700">{{ action.label }}</div>
-              <div class="mt-0.5 text-xs text-gray-400">{{ action.desc }}</div>
-            </button>
-          </div>
-        </div>
-
-        <!-- Message bubbles -->
-        <ChatMessageBubble
-          v-for="(msg, i) in messages"
-          :key="i"
-          :message="msg"
-          @cite-click="(src: CitationSource) => currentSources = [src]"
-        />
-
-        <!-- Streaming answer -->
-        <div
-          v-if="isStreaming && currentAnswer"
-          class="mb-4 rounded-2xl bg-blue-50/50 px-5 py-3"
-        >
-          <div class="mb-1 text-xs font-medium text-blue-600">小SU 正在回复...</div>
-          <div class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-            {{ currentAnswer }}
-            <span class="inline-block w-1.5 h-4 bg-blue-500 animate-pulse align-middle ml-0.5" />
-          </div>
-        </div>
-      </div>
-
-      <!-- Chat Input -->
-      <div class="shrink-0 border-t border-gray-200/80 bg-white px-6 py-4">
-        <ChatInput
-          :disabled="isStreaming"
-          @send="sendMessage"
-        />
-      </div>
+  <div class="h-screen flex bg-gray-100">
+    <div class="w-80 flex-shrink-0">
+      <ConversationSidebar
+        :current-conversation-id="currentConversationId"
+        :conversations="conversations"
+        @select="selectConversation"
+        @create="createConversation"
+        @delete="deleteConversation"
+      />
     </div>
 
-    <!-- Right: Agent panel -->
-    <aside
-      v-show="showAgentPanel"
-      class="w-80 shrink-0 border-l border-gray-200/80 bg-white overflow-y-auto"
-    >
-      <div class="p-1">
-        <AgentTracePanel :traces="currentTrace" :streaming="isStreaming" />
-        <SourcePanel :sources="currentSources" />
+    <div class="flex-1 flex flex-col min-w-0">
+      <div class="flex items-center justify-between px-6 py-4 bg-white border-b border-gray-200">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-900">
+            {{ conversations.find((c) => c.id === currentConversationId)?.title || '新对话' }}
+          </h2>
+          <p class="text-sm text-gray-500">与 internSU AI 的对话</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            @click="isPanelExpanded = !isPanelExpanded"
+            class="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
+            :title="isPanelExpanded ? '隐藏面板' : '显示面板'"
+          >
+            <component :is="isPanelExpanded ? Minimize2 : Maximize2" class="w-4 h-4 text-gray-600" />
+          </button>
+          <button class="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors">
+            <Settings class="w-4 h-4 text-gray-600" />
+          </button>
+        </div>
       </div>
-    </aside>
 
-    <!-- Toggle agent panel -->
-    <button
-      class="absolute right-0 top-1/2 z-10 -translate-y-1/2 rounded-l-lg border border-r-0
-             border-gray-200 bg-white px-1 py-4 text-gray-400 hover:text-gray-600 transition-colors"
-      :class="{ 'right-80': showAgentPanel }"
-      @click="showAgentPanel = !showAgentPanel"
-    >
-      {{ showAgentPanel ? '▸' : '◂' }}
-    </button>
+      <div
+        ref="messagesContainerRef"
+        class="flex-1 overflow-y-auto p-6"
+      >
+        <ChatMessageBubble
+          v-for="message in messages"
+          :key="message.id"
+          :message="message"
+        />
+      </div>
+
+      <ChatInput
+        :disabled="isLoading"
+        :rag-enabled="ragEnabled"
+        :tool-status="isLoading ? '正在思考中...' : undefined"
+        :token-count="tokenCount"
+        @send="sendMessage"
+        @toggle-rag="toggleRag"
+      />
+    </div>
+
+    <div v-show="isPanelExpanded" class="w-80 flex-shrink-0 border-l border-gray-200">
+      <AgentPanel
+        :current-node="currentNode"
+        :node-statuses="nodeStatuses"
+        :trace-logs="traceLogs"
+        :sources="messages[messages.length - 1]?.sources"
+        :token-count="tokenCount"
+        :elapsed-time="elapsedTime"
+      />
+    </div>
   </div>
 </template>
-
-<script lang="ts">
-const quickActions = [
-  { label: '查询企业制度', desc: '搜索公司规章制度', prompt: '帮我查询公司请假制度' },
-  { label: '查询企业数据', desc: '分析数据库数据', prompt: '统计本月各部门人数' },
-  { label: '上传知识库', desc: '添加企业文档', prompt: '我想上传一份文档到知识库' },
-  { label: 'AI问答', desc: '问任何企业相关的问题', prompt: '员工手册中关于年假的规定是什么？' },
-];
-</script>
